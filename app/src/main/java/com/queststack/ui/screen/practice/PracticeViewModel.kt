@@ -73,10 +73,12 @@ class PracticeViewModel(
 
     fun selectCategory(id: Long?) {
         if (_selectedCategoryId.value != id) _selectedCategoryId.value = id
+        _uiState.update { it.copy(selectedCategoryId = id) }
     }
 
     fun selectDifficulty(d: Int?) {
         if (_difficulty.value != d) _difficulty.value = d
+        _uiState.update { it.copy(difficulty = d) }
     }
 
     fun shuffle() {

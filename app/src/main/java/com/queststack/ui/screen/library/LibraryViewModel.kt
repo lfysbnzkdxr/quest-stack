@@ -57,10 +57,12 @@ class LibraryViewModel(
 
     fun selectCategory(id: Long?) {
         _selectedCategoryId.value = id
+        _uiState.update { it.copy(selectedCategoryId = id) }
     }
 
     fun selectDifficulty(d: Int?) {
         _difficulty.value = d
+        _uiState.update { it.copy(difficulty = d) }
     }
 
     fun deleteQuestion(question: QuestionWithRounds) {
