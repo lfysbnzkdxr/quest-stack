@@ -20,6 +20,7 @@ import androidx.room.PrimaryKey
 data class Round(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val questionId: Long,
+    /** 追问轮次序号，0 起（纯追问链，题目本身答案在 question.answer） */
     val orderIndex: Int,
     val question: String,
     val answer: String,

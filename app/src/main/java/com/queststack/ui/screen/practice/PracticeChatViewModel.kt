@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 
 data class ChatUiState(
     val question: QuestionWithRounds? = null,
+    /** 0 = 未看主答案，1 = 已看主答案（单题刷只揭示主问题答案，不播放追问链） */
     val revealed: Int = 0,
     val history: List<Long> = emptyList(),
     val currentId: Long,
@@ -23,9 +24,7 @@ data class ChatUiState(
 
 /**
  * 答题聊天页状态机：
- * - [ChatUiState.revealed]：已显示答案的轮次数。气泡流规则：
- *   面试官问题显示 rounds[0..revealed]，用户答案显示 rounds[0 until revealed]
- *   （rounds 按 orderIndex 升序），即每点一次"查看答案"追加一组 答案 + 下一问。
+ * - [ChatUiState.revealed]：是否已揭示主答案（0/1）。
  * - [ChatUiState.history]：上一题栈，"上一问"时 pop。
  */
 class PracticeChatViewModel(
@@ -59,13 +58,17 @@ class PracticeChatViewModel(
         }
     }
 
-    /** 揭示当前轮次答案；追问链耗尽后 no-op */
+    /** 揭示主问题参考答案；已揭示后 no-op */
     fun revealAnswer() {
         val state = _uiState.value
-        val size = state.question?.rounds?.size ?: 0
-        if (state.revealed < size) {
-            _uiState.update { it.copy(revealed = it.revealed + 1) }
+        if (state.revealed < 1) {
+            _uiState.update { it.copy(revealed = 1) }
         }
+    }
+
+    /** 浮层重新打开时重置为未看答案状态（保留当前题，清空上一问栈） */
+    fun reset() {
+        _uiState.update { it.copy(revealed = 0, history = emptyList()) }
     }
 
     /** 随机取一个新题：当前 id 入 history，重新加载，revealed 重置 0 */

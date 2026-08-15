@@ -188,12 +188,12 @@ fun AddScreen(viewModel: AddViewModel = viewModel()) {
             }
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 标准化结果提示 + 轮次预览
+            // 标准化结果提示 + 追问链预览
             if (uiState.standardizeDone) {
                 val roundsCount = uiState.roundsPreview?.size ?: 0
                 Text(
-                    text = if (roundsCount > 0) "已按本地规则解析为 $roundsCount 轮问答"
-                    else "未解析出问答轮次，将按单轮保存",
+                    text = if (roundsCount > 0) "已解析出 $roundsCount 轮追问（第一段作为主答案）"
+                    else "未解析出追问，仅保存主答案",
                     fontSize = 13.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )

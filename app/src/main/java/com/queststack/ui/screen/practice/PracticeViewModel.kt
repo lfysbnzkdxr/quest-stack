@@ -17,6 +17,12 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** 练题页练习模式（状态由 MainScreen 持有，顶栏点击弹面板选择；新增模式只需在枚举加一项） */
+enum class PracticeMode(val label: String) {
+    Practice("刷题"),
+    Interview("面试"),
+}
+
 data class PracticeUiState(
     val categories: List<Category> = emptyList(),
     val selectedCategoryId: Long? = null,

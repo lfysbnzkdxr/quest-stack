@@ -76,13 +76,24 @@ class AddViewModel(
         _uiState.update { it.copy(difficulty = d) }
     }
 
-    /** 按本地规则解析答案中的问答对，并用 normalize 规范化标题 */
+    /** 按本地规则解析答案中的问答对：第一对 → 主答案，其余 → 追问链预览 */
     fun standardize() {
         val current = _uiState.value
         val pairs = TextStandardizer.parseQaPairs(current.answer)
+        val mainAnswer: String
+        val followUps: List<Pair<String, String>>
+        if (pairs.isEmpty()) {
+            mainAnswer = current.answer
+            followUps = emptyList()
+        } else {
+            val first = pairs.first()
+            mainAnswer = first.second.ifBlank { first.first }
+            followUps = pairs.drop(1)
+        }
         _uiState.update {
             it.copy(
-                roundsPreview = pairs.ifEmpty { null },
+                answer = mainAnswer,
+                roundsPreview = followUps.ifEmpty { null },
                 standardizeDone = true,
                 title = TextStandardizer.normalize(current.title),
             )
@@ -110,11 +121,7 @@ class AddViewModel(
         _uiState.update { it.copy(aiBusy = false, message = message) }
     }
 
-    /** 将问答对格式化为本地可识别的 Q:/A: 文本，回填答案输入框供编辑 */
-    private fun roundsToText(rounds: List<Pair<String, String>>): String =
-        rounds.joinToString("\n") { (question, answer) -> "Q: $question\nA: $answer" }
-
-    /** AI 生成追问链：结果填入 roundsPreview，并回填答案输入框预览 */
+    /** AI 生成追问链：第一轮答案作为主答案，后续轮次作为追问链预览 */
     fun generateChain() {
         val current = _uiState.value
         if (current.aiBusy || current.title.isBlank() || current.answer.isNotBlank()) return
@@ -131,13 +138,19 @@ class AddViewModel(
                         config.baseUrl, config.apiKey, config.model, current.title,
                         timeoutSeconds = config.timeoutSeconds,
                     )
+                    if (rounds.isEmpty()) {
+                        _uiState.update {
+                            it.copy(aiBusy = false, message = "AI 未返回有效内容，请重试")
+                        }
+                        return@withContext
+                    }
                     _uiState.update {
                         it.copy(
                             aiBusy = false,
-                            roundsPreview = rounds,
+                            answer = rounds.first().second,
+                            roundsPreview = rounds.drop(1).ifEmpty { null },
                             standardizeDone = false,
-                            answer = roundsToText(rounds),
-                            message = "AI 生成 ${rounds.size} 轮问答（可预览后保存）",
+                            message = "AI 生成 ${rounds.size} 轮内容（可预览后保存）",
                         )
                     }
                 } catch (e: Exception) {
@@ -180,7 +193,7 @@ class AddViewModel(
         }
     }
 
-    /** AI 优化格式：结果作为轮次预览展示（save 时优先使用） */
+    /** AI 优化格式：第一轮答案作为主答案，后续轮次作为追问链预览 */
     fun formatAnswer() {
         val current = _uiState.value
         if (current.aiBusy || current.answer.isBlank()) return
@@ -197,12 +210,19 @@ class AddViewModel(
                         config.baseUrl, config.apiKey, config.model, current.title, current.answer,
                         timeoutSeconds = config.timeoutSeconds,
                     )
+                    if (rounds.isEmpty()) {
+                        _uiState.update {
+                            it.copy(aiBusy = false, message = "AI 未返回有效内容，请重试")
+                        }
+                        return@withContext
+                    }
                     _uiState.update {
                         it.copy(
                             aiBusy = false,
-                            roundsPreview = rounds,
+                            answer = rounds.first().second,
+                            roundsPreview = rounds.drop(1).ifEmpty { null },
                             standardizeDone = false,
-                            message = "已按 AI 优化为 ${rounds.size} 轮问答格式",
+                            message = "已按 AI 整理为 ${rounds.size} 轮内容",
                         )
                     }
                 } catch (e: Exception) {
@@ -212,17 +232,17 @@ class AddViewModel(
         }
     }
 
-    /** 校验 title 非空后入库；roundsPreview 非空用之，否则单轮 (title, answer) */
+    /** 校验 title 非空后入库；roundsPreview 为追问链，主答案存 question.answer */
     fun save() {
         val current = _uiState.value
         if (current.title.isBlank() || current.saving) return
-        val rounds = current.roundsPreview?.takeIf { it.isNotEmpty() }
-            ?: listOf(current.title to current.answer)
+        val rounds = current.roundsPreview.orEmpty()
         viewModelScope.launch {
             _uiState.update { it.copy(saving = true, message = null) }
             try {
                 questionRepository.addQuestion(
                     title = TextStandardizer.normalize(current.title),
+                    answer = current.answer,
                     categoryId = current.selectedCategoryId,
                     difficulty = current.difficulty,
                     rounds = rounds,

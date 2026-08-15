@@ -23,6 +23,7 @@ class QuestionRepositoryImpl(
 
     override suspend fun addQuestion(
         title: String,
+        answer: String,
         categoryId: Long?,
         difficulty: Int,
         rounds: List<Pair<String, String>>
@@ -30,17 +31,16 @@ class QuestionRepositoryImpl(
         val now = System.currentTimeMillis()
         val question = Question(
             title = title,
+            answer = answer,
             categoryId = categoryId,
             difficulty = difficulty,
             createdAt = now,
             updatedAt = now
         )
         val questionId = questionDao.insert(question)
-        val allRounds = buildList {
-            add(Round(questionId = questionId, orderIndex = 0, question = title, answer = "", source = "manual"))
-            rounds.forEachIndexed { index, (q, a) ->
-                add(Round(questionId = questionId, orderIndex = index + 1, question = q, answer = a, source = "manual"))
-            }
+        // rounds 为纯追问链（orderIndex 0 起），题目本身答案已存于 question.answer
+        val allRounds = rounds.mapIndexed { index, (q, a) ->
+            Round(questionId = questionId, orderIndex = index, question = q, answer = a, source = "manual")
         }
         roundDao.insertAll(allRounds)
         questionId

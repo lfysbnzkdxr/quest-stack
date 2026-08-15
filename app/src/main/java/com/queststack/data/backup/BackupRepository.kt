@@ -32,13 +32,14 @@ class BackupRepository(
         val questions = questionDao.observeAllWithRounds().first()
         val categoryNameById = categories.associate { it.id to it.name }
         val backupFile = BackupFile(
-            version = 1,
+            version = CURRENT_BACKUP_VERSION,
             exportedAt = System.currentTimeMillis(),
             categories = categories.map { BackupCategory(it.name, it.sortOrder) },
             questions = questions.map { qwr ->
                 val q = qwr.question
                 BackupQuestion(
                     title = q.title,
+                    answer = q.answer,
                     categoryName = categoryNameById[q.categoryId],
                     difficulty = q.difficulty,
                     createdAt = q.createdAt,
@@ -86,37 +87,36 @@ class BackupRepository(
         var importedCount = 0
         for (backupQuestion in backupFile.questions) {
             if (backupQuestion.title in existingTitles) continue // 不重复导入
+            // v1 兼容：rounds 含"第 0 轮 = 主问题"，其 answer 迁入 question.answer，其余轮次作为追问链重排
+            val (mainAnswer, followUpRounds) = if (backupFile.version >= 2) {
+                backupQuestion.answer to backupQuestion.rounds
+            } else {
+                val sorted = backupQuestion.rounds.sortedBy { it.orderIndex }
+                (sorted.firstOrNull()?.answer ?: "") to sorted.drop(1)
+            }
             val questionId = questionDao.insert(
                 Question(
                     title = backupQuestion.title,
+                    answer = mainAnswer,
                     categoryId = categoryIdByName[backupQuestion.categoryName], // 未知分类名 → null
                     difficulty = backupQuestion.difficulty,
                     createdAt = backupQuestion.createdAt,
                     updatedAt = backupQuestion.updatedAt
                 )
             )
-            val rounds = if (backupQuestion.rounds.isEmpty()) {
-                listOf(
-                    Round(
-                        questionId = questionId,
-                        orderIndex = 0,
-                        question = backupQuestion.title,
-                        answer = "",
-                        source = ""
-                    )
+            if (followUpRounds.isNotEmpty()) {
+                roundDao.insertAll(
+                    followUpRounds.mapIndexed { index, round ->
+                        Round(
+                            questionId = questionId,
+                            orderIndex = index,
+                            question = round.question,
+                            answer = round.answer,
+                            source = round.source
+                        )
+                    }
                 )
-            } else {
-                backupQuestion.rounds.map {
-                    Round(
-                        questionId = questionId,
-                        orderIndex = it.orderIndex,
-                        question = it.question,
-                        answer = it.answer,
-                        source = it.source
-                    )
-                }
             }
-            roundDao.insertAll(rounds)
             existingTitles.add(backupQuestion.title)
             importedCount++
         }
@@ -124,6 +124,6 @@ class BackupRepository(
     }
 
     companion object {
-        const val CURRENT_BACKUP_VERSION = 1
+        const val CURRENT_BACKUP_VERSION = 2
     }
 }

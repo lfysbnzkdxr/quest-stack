@@ -20,6 +20,8 @@ import androidx.room.PrimaryKey
 data class Question(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
+    /** 主问题参考答案（原子化后题目自包含答案） */
+    val answer: String = "",
     val categoryId: Long?,
     val difficulty: Int,
     val createdAt: Long,

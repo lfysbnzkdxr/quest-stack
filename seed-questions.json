@@ -1,0 +1,298 @@
+{
+  "version": 2,
+  "exportedAt": 1786804123050,
+  "categories": [
+    { "name": "Android", "sortOrder": 0 },
+    { "name": "Kotlin", "sortOrder": 1 },
+    { "name": "算法", "sortOrder": 2 },
+    { "name": "系统", "sortOrder": 3 },
+    { "name": "网络", "sortOrder": 4 }
+  ],
+  "questions": [
+    {
+      "title": "Activity 的启动模式有哪些？分别适用于什么场景？",
+      "answer": "共四种：standard（默认，每次都新建实例压栈）、singleTop（栈顶已存在则复用并回调 onNewIntent）、singleTask（栈内唯一，启动时把其上方 Activity 全部出栈）、singleInstance（独占一个任务栈）。典型场景：singleTop 用于通知栏点击跳转详情页防止重复压栈，singleTask 用于主界面、登录页这类全应用唯一的页面，singleInstance 用于来电、闹钟等系统级独立页面。",
+      "categoryName": "Android",
+      "difficulty": 1,
+      "createdAt": 1786804000000,
+      "updatedAt": 1786804000000,
+      "rounds": [
+        {
+          "orderIndex": 0,
+          "question": "如果用 standard 模式，从通知栏连续点同一个详情页多次，会发生什么？",
+          "answer": "会创建多个实例层层压栈，用户需要按多次返回键才能退出，体验很差。所以通知跳转常用 singleTop（栈顶复用）或 singleTask（栈内唯一）。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 1,
+          "question": "singleTask 和 singleInstance 都保证实例唯一，区别在哪？",
+          "answer": "singleTask 所在的任务栈里还可以容纳其他 Activity；singleInstance 所在任务栈只能有它一个实例，不能有其他 Activity 压入。singleInstance 更彻底，适合全局唯一且需要独立栈的场景，如系统来电界面。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 2,
+          "question": "onNewIntent 在哪些情况下会被调用？",
+          "answer": "实例被复用而不是新建时：singleTop 且目标实例位于栈顶、singleTask/singleInstance 且栈内已存在目标实例。此时不走 onCreate，而是先 onNewIntent 再 onResume。standard 模式永远新建实例，不会触发 onNewIntent。",
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "title": "谈谈 Handler 的工作原理，Handler 是如何实现线程切换的？",
+      "answer": "Handler 机制由三个组件构成：Handler 负责发送和处理消息，Looper 负责循环取消息，MessageQueue 是消息队列。主线程在 ActivityThread.main 中调用 prepareMainLooper 和 loop 启动消息循环。post/Runnable 最终封装成 Message 放入队列，Looper.loop() 阻塞式取出消息并交给 Handler.dispatchMessage 处理。消息在哪个线程的 Looper.loop 中取出，就在哪个线程处理，这就是线程切换的本质。",
+      "categoryName": "Android",
+      "difficulty": 2,
+      "createdAt": 1786804010000,
+      "updatedAt": 1786804010000,
+      "rounds": [
+        {
+          "orderIndex": 0,
+          "question": "延时消息是怎么实现的？",
+          "answer": "MessageQueue 按消息的 when（执行时间戳）升序排列，next() 会阻塞（nativePollOnce）到最早那条消息的时间点；如果队列里只有延时的消息，线程会进入休眠，而不是忙等。另外 IdleHandler 在队列空闲时执行，可用于延迟加载等场景。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 1,
+          "question": "一个线程最多能创建几个 Looper？",
+          "answer": "一个线程只能有一个 Looper。Looper.prepare() 通过 ThreadLocal 保证每个线程只能调用一次，重复调用会抛 RuntimeException。创建子线程的 Looper 要先 prepare 再 loop，否则 Handler 构造会报错。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 2,
+          "question": "消息队列中的消息是怎么排序的？相同延迟时间的消息顺序有保证吗？",
+          "answer": "按消息的执行时间 when 升序排列，插入时用链表的二分比较确定位置。执行时间相同的消息，先入队的排在前面，后续取消息按队首出队，因此同延迟消息保持先进先出的顺序。",
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "title": "从点击图标到首帧绘制，简述 Activity 冷启动的完整流程",
+      "answer": "Launcher 通过 Binder 调用 AMS.startActivity → AMS 校验 Intent 与目标，若进程不存在则通知 Zygote fork 新进程并创建 Application → ActivityThread 收到 handleLaunchActivity → 创建 Activity 实例并 attach → 依次走 onCreate/onStart/onResume → setContentView 构建 DecorView，ViewRootImpl.performTraversals 触发 measure/layout/draw → Choreographer 配合 vsync 驱动渲染，完成首帧上屏。",
+      "categoryName": "Android",
+      "difficulty": 3,
+      "createdAt": 1786804020000,
+      "updatedAt": 1786804020000,
+      "rounds": [
+        {
+          "orderIndex": 0,
+          "question": "onCreate 里做耗时操作会有什么影响？",
+          "answer": "onCreate 属于主线程，期间窗口还没有完成首次绘制，做耗时操作（IO、解析大文件）会直接拖慢首帧时间，甚至触发 ANR。耗时任务应放到后台线程，或用 onPostCreate 等时机延迟执行。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 1,
+          "question": "多进程应用对 Application 的创建有什么影响？",
+          "answer": "每个进程都会独立创建一个 Application 实例并执行 onCreate，所以全局初始化代码会在每个进程各跑一遍。常用做法是按进程名做区分，避免重复初始化或重复上报。",
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "title": "Kotlin 中 val 和 var 有什么区别？const val 呢？",
+      "answer": "val 是只读引用，初始化后不能重新赋值，但指向的对象内部仍然可变；var 是可重新赋值的引用。const val 是编译期常量，只能修饰顶层属性或 object 内的属性，运行时不可变。",
+      "categoryName": "Kotlin",
+      "difficulty": 1,
+      "createdAt": 1786804030000,
+      "updatedAt": 1786804030000,
+      "rounds": [
+        {
+          "orderIndex": 0,
+          "question": "val 修饰的集合可以调用 add 吗？",
+          "answer": "可以。val 只是引用本身不可重新赋值，集合内容是可变的。如果想让集合内容也不可变，应该使用不可变集合类型（listOf/mapOf 等）。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 1,
+          "question": "val 能保证线程安全吗？",
+          "answer": "不能。val 只约束引用能否重新赋值，不提供任何同步语义；跨线程共享的 val 对象，其内部状态和发布可见性仍需自己处理（如 volatile、锁）。",
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "title": "协程和线程有什么区别？Kotlin 协程的挂起机制是怎么实现的？",
+      "answer": "线程由操作系统内核调度，切换有内核态开销；协程是用户态协作式调度，挂起不阻塞线程。挂起时协程把当前执行状态（Continuation）保存下来并让出执行权，线程可以去执行其他任务，恢复时在指定调度器上继续运行。编译器会把 suspend 函数改写成状态机，并把 Continuation 作为参数传递，从而实现可恢复的暂停。",
+      "categoryName": "Kotlin",
+      "difficulty": 2,
+      "createdAt": 1786804040000,
+      "updatedAt": 1786804040000,
+      "rounds": [
+        {
+          "orderIndex": 0,
+          "question": "Dispatchers.Main 和 Dispatchers.IO 分别适合什么场景？",
+          "answer": "Main 用于主线程上的轻量操作，比如更新 UI、读取轻量状态；IO 基于线程池，适合阻塞型操作（网络请求、数据库、文件读写）。注意 IO 不等于无限并发，线程数有上限。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 1,
+          "question": "withContext 做了什么？和 launch 切换线程有什么区别？",
+          "answer": "withContext 挂起当前协程、切到指定调度器执行代码块，执行完自动恢复原来的上下文（协程还是同一个）；launch 是启动一个新协程，与当前协程是并行关系。需要'切线程干活然后回到原线程'时用 withContext。",
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "title": "inline、noinline、crossinline 的区别和使用场景",
+      "answer": "inline 会把函数体复制到调用处，避免创建 lambda 对象，且 lambda 中允许非局部返回（直接 return 外层函数）；noinline 标记某个参数不内联，让该 lambda 保持为独立对象（可存入集合等）；crossinline 禁止 lambda 内的非局部返回，但保留内联优化，适用于 lambda 会被间接调用（如传入另一个内联 lambda）的场景。",
+      "categoryName": "Kotlin",
+      "difficulty": 3,
+      "createdAt": 1786804050000,
+      "updatedAt": 1786804050000,
+      "rounds": [
+        {
+          "orderIndex": 0,
+          "question": "为什么 public 的 inline 函数不能访问 private 成员？",
+          "answer": "因为 inline 函数体在调用处展开，调用方可能在其他模块，访问不到原类的 private 成员。这是为了保证封装性，所以 public inline 函数只能访问 public 成员；internal 成员需要 @PublishedApi 注解才能被内联访问。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 1,
+          "question": "什么时候不适合用 inline？",
+          "answer": "函数体很大、内部有大量代码时，内联会复制到每个调用点，明显增大包体积；跨模块边界频繁被调用时也不划算。inline 一般用于小体量的高阶函数，如集合操作、作用域函数。",
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "title": "如何判断一个链表是否有环？",
+      "answer": "用快慢指针：快指针每次走 2 步，慢指针每次走 1 步，遍历链表；如果快指针追上慢指针（相遇），说明有环；如果快指针走到 null，说明无环。时间复杂度 O(n)，空间复杂度 O(1)。",
+      "categoryName": "算法",
+      "difficulty": 1,
+      "createdAt": 1786804060000,
+      "updatedAt": 1786804060000,
+      "rounds": [
+        {
+          "orderIndex": 0,
+          "question": "有环的情况下，如何找到环的入口节点？",
+          "answer": "快慢指针第一次相遇后，把快指针重置回 head，两个指针每次都走 1 步，再次相遇的节点就是环的入口。原理是头节点到环入口的距离等于相遇点到环入口的距离（数学推导）。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 1,
+          "question": "为什么快慢指针一定会相遇，会不会永远错过？",
+          "answer": "进入环之后，慢指针每次移动 1，快指针移动 2，相对速度是 1，相当于快指针每次靠近慢指针 1 个节点，所以一定能追上，不会错过。",
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "title": "LRU 缓存如何实现？说说你的设计思路",
+      "answer": "核心是哈希表 + 双向链表：哈希表负责 O(1) 定位节点，双向链表维护访问顺序。get 命中时把节点移到链表头部，put 时新节点插头部，容量超限就淘汰链表尾部的节点。Java 里可以直接用 LinkedHashMap 并设置 accessOrder = true 实现。",
+      "categoryName": "算法",
+      "difficulty": 2,
+      "createdAt": 1786804070000,
+      "updatedAt": 1786804070000,
+      "rounds": [
+        {
+          "orderIndex": 0,
+          "question": "为什么用双向链表而不是单向链表？",
+          "answer": "淘汰时删除尾部节点需要 O(1) 找到它的前驱节点，单向链表只能从头遍历，删除退化为 O(n)。双向链表可以直接通过 prev 指针操作，删除和移动都是 O(1)。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 1,
+          "question": "多线程并发访问 LRU 怎么保证安全？",
+          "answer": "最直接的是对整个结构加锁；也可以分段锁或读写锁优化。手写实现时哈希表和链表必须一起加锁，否则 get 命中移动节点时会破坏一致性。",
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "title": "手写快速排序并分析时间复杂度，如何避免退化？",
+      "answer": "快排是分治思想：每次选一个基准元素，通过 partition 把数组分成小于基准和大于基准的两部分，再递归处理两侧。平均时间复杂度 O(nlogn)，最坏 O(n²)（比如已排序数组每次选到极值做基准）。优化手段：三数取中、随机选基准、数据量小的时候改用插入排序、递归转迭代避免栈溢出。",
+      "categoryName": "算法",
+      "difficulty": 3,
+      "createdAt": 1786804080000,
+      "updatedAt": 1786804080000,
+      "rounds": [
+        {
+          "orderIndex": 0,
+          "question": "快排为什么不稳定？",
+          "answer": "partition 过程中会交换元素位置，两个相等的元素可能因为交换而改变相对顺序，所以快排不是稳定排序。需要稳定排序时用归并排序。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 1,
+          "question": "什么场景下快排会退化到 O(n²)？",
+          "answer": "数据接近有序且固定选首元素（或尾元素）做基准时，每次分区都极端不平衡，一侧只有一个元素，递归深度退化为 n，总复杂度 O(n²)。随机化基准可以规避这种输入。",
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "title": "Android 进程间通信（IPC）有哪些方式？各自的优缺点？",
+      "answer": "常见方式：Intent/Bundle（适合轻量一次性传参，不能跨进程传对象句柄）、文件（适合大数据但需自行同步）、ContentProvider（标准化的数据共享，带权限控制）、BroadcastReceiver（异步单向通知）、AIDL/Binder（面向对象的双向调用，性能好且有安全校验）、Socket（跨设备/跨平台）。Binder 是 Android 进程间通信的基石，系统服务全部基于它。",
+      "categoryName": "系统",
+      "difficulty": 2,
+      "createdAt": 1786804090000,
+      "updatedAt": 1786804090000,
+      "rounds": [
+        {
+          "orderIndex": 0,
+          "question": "Binder 相比共享内存的优势是什么？",
+          "answer": "共享内存吞吐高但要自己处理同步和权限控制；Binder 一次拷贝（配合 mmap）性能不差，还自带调用者身份校验（UID/PID），安全性更好，所以系统级 IPC 优先选 Binder。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 1,
+          "question": "ContentProvider 适合传大文件吗？",
+          "answer": "不适合。ContentProvider 跨进程传递大数据时会有序列化和拷贝开销，官方建议大文件通过 FileProvider 共享文件路径，接收方直接读文件，避免数据拷贝。",
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "title": "Binder 机制的核心思想是什么？一次 Binder 调用经历了哪些过程？",
+      "answer": "Binder 基于内核的 binder 驱动实现：Client 持有 Server 的代理对象（Proxy），调用时通过 transact 把数据交给驱动，驱动借助 mmap 把数据从用户态拷贝到内核态（一次拷贝），并通知 Server 进程，Server 端的 Stub 在 onTransact 里解析数据并执行，结果沿同路径返回。相比传统 Socket 的两次拷贝，Binder 少一次，性能更好。",
+      "categoryName": "系统",
+      "difficulty": 3,
+      "createdAt": 1786804100000,
+      "updatedAt": 1786804100000,
+      "rounds": [
+        {
+          "orderIndex": 0,
+          "question": "为什么 Binder 要用 mmap？",
+          "answer": "mmap 让内核和客户端进程共享同一块物理内存，数据从客户端用户态拷贝到内核态后，服务端直接映射读取，避免了传统 IPC 的两次拷贝（用户态→内核态→用户态）。这是 Binder 性能优势的关键。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 1,
+          "question": "oneway 类型的 Binder 调用有什么特点？",
+          "answer": "oneway 是异步调用，请求发出后 Binder 驱动立即返回，不等待服务端执行结果，调用方不会被阻塞；适合通知类、不需要返回值的调用，系统服务中有大量 oneway 接口。",
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "title": "HTTPS 的握手过程是怎样的？",
+      "answer": "TLS 握手：1) 客户端发 ClientHello（支持的算法、客户端随机数）；2) 服务端回 ServerHello（选定算法、服务端随机数）并附上证书；3) 客户端校验证书（CA 链、域名、有效期）；4) 客户端生成预主密钥，用服务端公钥加密发送；5) 双方用两个随机数 + 预主密钥推导出会话密钥；6) 之后改用对称加密通信，并发送 Finished 确认握手完成。",
+      "categoryName": "网络",
+      "difficulty": 2,
+      "createdAt": 1786804110000,
+      "updatedAt": 1786804110000,
+      "rounds": [
+        {
+          "orderIndex": 0,
+          "question": "证书过期了客户端会怎么处理？",
+          "answer": "客户端校验证书有效期失败，会认为服务端身份不可信，报 SSL/证书错误并阻止连接。浏览器或 App 可以选择忽略风险继续（不推荐），正常流程是服务端提前更新证书。",
+          "source": "manual"
+        },
+        {
+          "orderIndex": 1,
+          "question": "如何防范中间人攻击？",
+          "answer": "核心是验证服务端身份：证书由受信任的 CA 签名，客户端校验签名链、域名和有效期。更高强度可以用证书固定（Certificate Pinning），在客户端内置服务端证书指纹，即使 CA 被攻破也能发现伪造证书。",
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "title": "HTTP 和 HTTPS 有什么区别？",
+      "answer": "HTTPS 是在 HTTP 之上叠加了 TLS/SSL 加密层：默认端口 443（HTTP 是 80）；HTTPS 提供数据加密、完整性校验和服务器身份认证，防止窃听、篡改和冒充；代价是握手多出 2 个 RTT，首次连接性能略差，服务端还需要证书。",
+      "categoryName": "网络",
+      "difficulty": 1,
+      "createdAt": 1786804115000,
+      "updatedAt": 1786804115000,
+      "rounds": []
+    }
+  ]
+}
