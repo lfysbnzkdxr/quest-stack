@@ -1,101 +1,89 @@
 package com.queststack.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.MutatePriority
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.queststack.ui.component.GlassNavigationBar
-import com.queststack.ui.component.GlassTopAppBar
 import com.queststack.ui.component.LocalGlassBackdrop
 import com.queststack.ui.screen.add.AddScreen
-import com.queststack.ui.screen.interview.InterviewScreen
+import com.queststack.ui.screen.home.HomeScreen
 import com.queststack.ui.screen.library.LibraryScreen
-import com.queststack.ui.screen.practice.PracticeChatScreen
-import com.queststack.ui.screen.practice.PracticeMode
-import com.queststack.ui.screen.practice.PracticeScreen
+import com.queststack.ui.screen.practice.PracticeSession
+import com.queststack.ui.screen.practice.PracticeSessionScreen
+import com.queststack.ui.screen.practiceLog.PracticeLogScreen
 import com.queststack.ui.screen.settings.SettingsScreen
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.Icon
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.basic.Check
-import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.math.abs
 
-/** 底部导航 tab 定义 */
-enum class MainTab(
-    val route: String,
-    val icon: ImageVector,
-    val label: String,
-) {
-    Practice("practice", MiuixIcons.Home, "练题"),
-    Library("library", MiuixIcons.GridView, "题库"),
-    Add("add", MiuixIcons.Add, "添加"),
-    Settings("settings", MiuixIcons.Settings, "设置"),
+/** 底部导航 tab 定义（顺序即页面横滑顺序） */
+enum class MainTab(val icon: ImageVector, val label: String) {
+    Home(MiuixIcons.Home, "主页"),
+    Library(MiuixIcons.GridView, "题库"),
+    Settings(MiuixIcons.Settings, "设置"),
 }
 
+/**
+ * 主界面（参考 KernelSU 架构）：
+ * - 无全局顶栏：HorizontalPager 全屏承载三个 Tab，每个 Tab 页自带顶栏随页面横滑；
+ * - 底栏悬浮毛玻璃导航（采样全局 backdrop，overlay 在内容之上，不占用内容区域）；
+ * - 闪卡练题 / 添加页为全屏 overlay，盖在 pager 之上；
+ * - 分类练习弹窗的变暗遮罩在同一窗口绘制，避免独立 Popup 窗口导致状态栏闪烁/恢复。
+ */
 @Composable
 fun MainScreen() {
-    val navController = rememberNavController()
-    val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route
-    // 子路由（如答题聊天页）不显示底部导航，营造沉浸式答题体验；
-    // 首次组合 currentRoute 尚为 null，视为 tab 路由避免首帧闪烁
-    val isTabRoute = currentRoute?.let { route -> MainTab.entries.any { it.route == route } } ?: true
+    val pagerState = rememberPagerState(pageCount = { MainTab.entries.size })
+    val scope = rememberCoroutineScope()
+    var currentTabIndex by remember { mutableIntStateOf(0) }
+    var practiceSession by remember { mutableStateOf<PracticeSession?>(null) }
+    var addOpen by remember { mutableStateOf(false) }
+    var practiceLogOpen by remember { mutableStateOf(false) }
+    // 分类面板展开状态提升到 MainScreen，遮罩与 Activity 同窗口，点击遮罩/返回键关闭
+    var categoryMenuExpanded by remember { mutableStateOf(false) }
+    // 首帧完成后再开启预加载，避免启动时同时创建三页（参考 KernelSU rememberContentReady）
+    var contentReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { contentReady = true }
 
-    // 练题页练习模式（刷题/面试等），顶栏点击弹面板选择；状态提升到此处以便顶栏读取
-    var practiceMode by rememberSaveable { mutableStateOf(PracticeMode.Practice) }
-    var modeMenuExpanded by remember { mutableStateOf(false) }
-    var modeBarHeight by remember { mutableIntStateOf(0) }
-    val density = LocalDensity.current
+    // 滑动/点击切换时实时同步当前 tab（驱动底栏选中态）
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }
+            .collect { page -> currentTabIndex = page }
+    }
 
-    // 采集整页内容作为玻璃顶栏 / 底栏的模糊背景层（参考 miuix example 的 CompactScreenLayout）
+    // 采集整页内容作为玻璃底栏的模糊背景层（底栏 overlay 与采集层互为兄弟）
     val surfaceColor = MiuixTheme.colorScheme.surface
     val backdrop = rememberLayerBackdrop {
         drawRect(surfaceColor)
@@ -104,202 +92,154 @@ fun MainScreen() {
     val navItems = remember { MainTab.entries.map { NavigationItem(label = it.label, icon = it.icon) } }
 
     CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            containerColor = MiuixTheme.colorScheme.background,
-            topBar = {
-                if (isTabRoute) {
-                    // 顶栏渲染在 Scaffold topBar 槽位，与 backdrop 采集层（content 区）互为兄弟，
-                    // 避免玻璃顶栏在采集节点后代内采样 backdrop 形成循环采样（RenderThread SIGSEGV 根因）
-                    val tab = MainTab.entries.firstOrNull { it.route == currentRoute }
-                    if (tab == MainTab.Practice) {
-                        // 练题页：标题带当前模式名，点击整条顶栏弹出模式选择面板
-                        Box(modifier = Modifier.onSizeChanged { modeBarHeight = it.height }) {
-                            GlassTopAppBar(
-                                title = "练题 · ${practiceMode.label}",
-                                onClick = { modeMenuExpanded = true },
-                            )
-                            if (modeMenuExpanded) {
-                                // 标题居中，面板也相对顶栏水平居中弹出
-                                Popup(
-                                    alignment = Alignment.TopCenter,
-                                    offset = IntOffset(0, modeBarHeight + with(density) { 4.dp.roundToPx() }),
-                                    onDismissRequest = { modeMenuExpanded = false },
-                                    properties = PopupProperties(focusable = true),
-                                ) {
-                                    PracticeModePanel(
-                                        currentMode = practiceMode,
-                                        onSelect = { mode ->
-                                            practiceMode = mode
-                                            modeMenuExpanded = false
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        GlassTopAppBar(title = tab?.label ?: "")
-                    }
-                }
-            },
-            bottomBar = {
-                if (isTabRoute) {
-                    GlassNavigationBar(
-                        selected = MainTab.entries.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0),
-                        onSelect = { index ->
-                            val tab = MainTab.entries[index]
-                            navController.navigate(tab.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        items = navItems,
-                    )
-                }
-            },
-        ) { padding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .layerBackdrop(backdrop),
-            ) {
-                NavHost(
-                    navController = navController,
-                    startDestination = MainTab.Practice.route,
-                    modifier = Modifier.padding(
-                        PaddingValues(
-                            // tab 路由：Scaffold content padding 的 top 即顶栏实际高度（含状态栏 inset，
-                            // SmallTopAppBar 默认自处理），直接沿用，内容从顶栏下方开始；
-                            // 子路由（practice_chat）：topBar 槽位为空，padding top 为状态栏 inset，
-                            // 但 chat 页自绘 edge-to-edge 纯色顶栏，此处不再预留，保持 top=0
-                            top = if (isTabRoute) padding.calculateTopPadding() else 0.dp,
-                            // 底部预留悬浮底栏高度（含悬浮间距，避免内容被遮挡）；
-                            // 子路由时 bottomBar 为空，Scaffold 仅保留系统导航栏 inset
-                            bottom = padding.calculateBottomPadding(),
-                            start = padding.calculateStartPadding(LocalLayoutDirection.current),
-                            end = padding.calculateEndPadding(LocalLayoutDirection.current),
-                        ),
-                    ),
+        Box(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                containerColor = MiuixTheme.colorScheme.background,
+                // 底栏不再放在 bottomBar 槽位，而是作为 overlay 浮于内容上方
+                bottomBar = {},
+            ) { _ ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .layerBackdrop(backdrop),
                 ) {
-                    composable(MainTab.Practice.route) {
-                        PracticeScreen(
-                            mode = practiceMode,
-                            onStartInterview = { categoryId, difficulty ->
-                                navController.navigate("interview?categoryId=$categoryId&difficulty=$difficulty")
-                            },
-                        )
-                    }
-                    composable(MainTab.Library.route) {
-                        LibraryScreen(
-                            onQuestionClick = { questionId ->
-                                navController.navigate("practice_chat/$questionId")
-                            },
-                        )
-                    }
-                    composable(MainTab.Add.route) {
-                        AddScreen()
-                    }
-                    composable(MainTab.Settings.route) {
-                        SettingsScreen()
-                    }
-                    composable(
-                        route = "practice_chat/{questionId}",
-                        arguments = listOf(navArgument("questionId") { type = NavType.LongType }),
-                    ) { entry ->
-                        val questionId = entry.arguments?.getLong("questionId") ?: 0L
-                        PracticeChatScreen(
-                            questionId = questionId,
-                            onBack = { navController.popBackStack() },
-                        )
-                    }
-                    composable(
-                        route = "interview?categoryId={categoryId}&difficulty={difficulty}",
-                        arguments = listOf(
-                            // 数值类型 NavType 不支持 nullable，用 StringType + 手动解析
-                            navArgument("categoryId") {
-                                type = NavType.StringType
-                                nullable = true
-                                defaultValue = null
-                            },
-                            navArgument("difficulty") {
-                                type = NavType.StringType
-                                nullable = true
-                                defaultValue = null
-                            },
-                        ),
-                    ) { entry ->
-                        val categoryId = entry.arguments?.getString("categoryId")?.toLongOrNull()
-                        val difficulty = entry.arguments?.getString("difficulty")?.toIntOrNull()
-                        InterviewScreen(
-                            categoryId = categoryId,
-                            difficulty = difficulty,
-                            onBack = { navController.popBackStack() },
-                        )
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                        // 预加载相邻页面，避免点击切换时因创建中间页掉帧（KernelSU 同款）
+                        beyondViewportPageCount = if (contentReady) MainTab.entries.size - 1 else 0,
+                        overscrollEffect = null,
+                    ) { page ->
+                        when (MainTab.entries[page]) {
+                            MainTab.Home -> HomeScreen(
+                                onStartPractice = { practiceSession = it },
+                                onGoLibrary = { scope.launch { pagerState.springAnimateToPage(MainTab.Library.ordinal) } },
+                                onOpenPracticeLog = { practiceLogOpen = true },
+                                categoryMenuExpanded = categoryMenuExpanded,
+                                onCategoryMenuExpandedChange = { categoryMenuExpanded = it },
+                            )
+                            MainTab.Library -> LibraryScreen(
+                                onStartPractice = { practiceSession = it },
+                                onAddClick = { addOpen = true },
+                            )
+                            MainTab.Settings -> SettingsScreen()
+                        }
                     }
                 }
             }
-        }
-    }
-}
-
-/** 练习模式选择面板：遍历 PracticeMode.entries 渲染，新增模式自动出现。
- * 固定宽度（与顶栏标题"练题 · 刷题"相仿），行铺满面板、整行可点击。 */
-@Composable
-private fun PracticeModePanel(
-    currentMode: PracticeMode,
-    onSelect: (PracticeMode) -> Unit,
-) {
-    Card(
-        modifier = Modifier.dropShadow(
-            shape = RoundedCornerShape(16.dp),
-            shadow = Shadow(radius = 12.dp, color = Color.Black, alpha = 0.15f),
-        ),
-        cornerRadius = 16.dp,
-        insideMargin = PaddingValues(0.dp),
-    ) {
-        Column(
-            modifier = Modifier
-                .width(130.dp)
-                .padding(vertical = 4.dp),
-        ) {
-            PracticeMode.entries.forEach { mode ->
-                ModeRow(
-                    text = mode.label,
-                    isSelected = mode == currentMode,
-                    onClick = { onSelect(mode) },
+            // 悬浮底栏 overlay（参考 KernelSU FloatingBottomBar）：不占内容区域，内容可延伸到底栏后方
+            GlassNavigationBar(
+                modifier = Modifier.fillMaxSize(),
+                selected = currentTabIndex,
+                onSelect = { index ->
+                    // 快速连点会中断当前动画、直接滑向新目标；
+                    // 弹簧动画（KernelSU 同款）起步跟手、收尾轻弹
+                    scope.launch { pagerState.springAnimateToPage(index) }
+                },
+                items = navItems,
+            )
+            // 全屏 overlay：闪卡练题
+            practiceSession?.let { session ->
+                PracticeSessionScreen(
+                    session = session,
+                    onBack = { practiceSession = null },
+                )
+            }
+            // 全屏 overlay：添加题目
+            if (addOpen) {
+                AddScreen(onBack = { addOpen = false })
+            }
+            // 全屏 overlay：练题记录
+            if (practiceLogOpen) {
+                PracticeLogScreen(onBack = { practiceLogOpen = false })
+            }
+            // 分类面板遮罩：与 Activity 同窗口，盖住顶栏/内容/底栏，点击关闭
+            if (categoryMenuExpanded) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.3f))
+                        .clickable(
+                            interactionSource = null,
+                            indication = null,
+                            onClick = { categoryMenuExpanded = false },
+                        ),
                 )
             }
         }
     }
+    // 返回键优先级：先关分类面板，再关 overlay，再回主页 Tab，最后才退出应用
+    BackHandler(
+        enabled = categoryMenuExpanded || practiceSession != null || addOpen || practiceLogOpen || currentTabIndex != 0,
+    ) {
+        when {
+            categoryMenuExpanded -> categoryMenuExpanded = false
+            practiceLogOpen -> practiceLogOpen = false
+            practiceSession != null -> practiceSession = null
+            addOpen -> addOpen = false
+            currentTabIndex != 0 -> scope.launch { pagerState.springAnimateToPage(0) }
+        }
+    }
 }
 
-@Composable
-private fun ModeRow(text: String, isSelected: Boolean, onClick: () -> Unit) {
-    // 行宽铺满面板（整行可点击），文字 + 勾选图标整体居中；
-    // 未选中时图标透明占位，保证各行文字起始位置一致（文字对齐）
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-    ) {
-        Text(
-            text = text,
-            fontSize = 15.sp,
-            color = if (isSelected) MiuixTheme.colorScheme.primary
-            else MiuixTheme.colorScheme.onSurfaceContainer,
-            maxLines = 1,
-        )
-        Icon(
-            imageVector = MiuixIcons.Basic.Check,
-            contentDescription = null,
-            tint = if (isSelected) MiuixTheme.colorScheme.primary else Color.Transparent,
-            modifier = Modifier.size(18.dp),
-        )
+/**
+ * 底部导航切换弹簧（参考 KernelSU 的 PagerNavigationSpringSpec）：
+ * stiffness 322.2 介于 StiffnessLow(150) 与 Medium(400) 之间，
+ * dampingRatio ≈ 0.9 轻微欠阻尼，起步跟手、收尾带一丝弹性的"丝滑"手感。
+ */
+private val PagerNavigationSpringSpec: SpringSpec<Float> = spring(
+    stiffness = 322.2f,
+    dampingRatio = 32.31f / (2f * kotlin.math.sqrt(322.2f)),
+    visibilityThreshold = 0.5f,
+)
+
+/**
+ * 弹簧动画滚动到指定页（参考 KernelSU 的 springAnimateToPage）：
+ * 用 Animatable 逐帧计算位移并 scrollBy 驱动，速度曲线完全由弹簧决定，
+ * 比 animateScrollToPage 的默认动画更顺滑；跨多页时连续滑过中间页面。
+ */
+private suspend fun PagerState.springAnimateToPage(target: Int) {
+    if (target !in 0 until pageCount) return
+    var shouldSnapToTarget = false
+    scroll(MutatePriority.UserInput) {
+        val pageSize = layoutInfo.pageSize + layoutInfo.pageSpacing
+        val distance = target - currentPage - currentPageOffsetFraction
+        val scrollPixels = distance * pageSize
+        if (abs(scrollPixels) <= 0.5f) return@scroll
+
+        var consumedScroll = 0f
+        var skipScroll = false
+        Animatable(0f).animateTo(
+            targetValue = scrollPixels,
+            animationSpec = PagerNavigationSpringSpec,
+        ) {
+            if (skipScroll) return@animateTo
+
+            val delta = value - consumedScroll
+            if (abs(delta) > 0.5f) {
+                val consumed = scrollBy(delta)
+                consumedScroll += consumed
+                if (abs(delta - consumed) > 0.1f) {
+                    shouldSnapToTarget = true
+                    skipScroll = true
+                }
+            } else {
+                consumedScroll = value
+            }
+
+            if (abs(velocity) < 0.1f && abs(scrollPixels - consumedScroll) < 1.0f) {
+                skipScroll = true
+            }
+        }
+
+        val remaining = scrollPixels - consumedScroll
+        if (abs(remaining) > 0.5f) {
+            scrollBy(remaining)
+        }
+    }
+
+    if (shouldSnapToTarget || currentPage != target) {
+        scrollToPage(target)
     }
 }

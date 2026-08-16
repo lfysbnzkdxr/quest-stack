@@ -8,10 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,8 +26,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,22 +35,17 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.queststack.data.db.Category
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.Check
-import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.extended.ChevronForward
+import top.yukonga.miuix.kmp.icon.extended.ExpandMore
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * 练题页 / 题库页共用的筛选栏：分类下拉 + 难度四档 chips + 可选右侧"换一题"。
- *
- * 两页必须走同一组件，避免布局漂移；难度行固定 44dp 高，保证有无"换一题"
- * 按钮时 chips 的垂直位置完全一致。
- *
- * @param onShuffle 非空时在难度行右侧渲染"换一题"按钮（题库页传 null）。
+ * 练题页 / 题库页共用的筛选栏：单行布局，左分类、右难度两个收缩式下拉。
+ * 两页必须走同一组件，避免布局漂移。
  */
 @Composable
 fun CategoryFilterBar(
@@ -60,39 +54,41 @@ fun CategoryFilterBar(
     difficulty: Int?,
     onSelectCategory: (Long?) -> Unit,
     onSelectDifficulty: (Int?) -> Unit,
-    onShuffle: (() -> Unit)? = null,
 ) {
     var categoryMenuExpanded by remember { mutableStateOf(false) }
+    var difficultyMenuExpanded by remember { mutableStateOf(false) }
     var categoryButtonHeight by remember { mutableIntStateOf(0) }
+    var difficultyButtonHeight by remember { mutableIntStateOf(0) }
+    var categoryButtonWidth by remember { mutableIntStateOf(0) }
+    var difficultyButtonWidth by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
+    // 值前带"分类/难度"前缀，避免"全部/全部"语义不清
     val currentCategoryName =
-        if (selectedCategoryId == null) "全部"
-        else categories.firstOrNull { it.id == selectedCategoryId }?.name ?: "全部"
+        if (selectedCategoryId == null) "分类：全部"
+        else "分类：${categories.firstOrNull { it.id == selectedCategoryId }?.name ?: "全部"}"
+    val currentDifficultyName = "难度：${difficultyLabel(difficulty)}"
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 分类选择（DropdownMenu）
-        Box(modifier = Modifier.onSizeChanged { categoryButtonHeight = it.height }) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(percent = 50))
-                    .background(MiuixTheme.colorScheme.surfaceContainer)
-                    .clickable { categoryMenuExpanded = true }
-                    .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = currentCategoryName,
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceContainer,
-                    maxLines = 1,
-                )
-                DropdownArrowEndAction(actionColor = MiuixTheme.colorScheme.onBackgroundVariant)
-            }
+        // 左侧：分类选择（收缩式下拉）
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .onSizeChanged {
+                    categoryButtonHeight = it.height
+                    categoryButtonWidth = it.width
+                },
+        ) {
+            FilterDropdownButton(
+                label = currentCategoryName,
+                expanded = categoryMenuExpanded,
+                onClick = { categoryMenuExpanded = true },
+            )
             if (categoryMenuExpanded) {
                 Popup(
                     alignment = Alignment.TopStart,
@@ -100,9 +96,11 @@ fun CategoryFilterBar(
                     onDismissRequest = { categoryMenuExpanded = false },
                     properties = PopupProperties(focusable = true),
                 ) {
+                    // 面板宽度与按钮对齐（= 各自半边），不越界
                     CategoryDropdownPanel(
                         categories = categories,
                         selectedCategoryId = selectedCategoryId,
+                        panelWidth = with(density) { categoryButtonWidth.toDp() },
                         onSelect = { id ->
                             onSelectCategory(id)
                             categoryMenuExpanded = false
@@ -111,29 +109,35 @@ fun CategoryFilterBar(
                 }
             }
         }
-        // 难度筛选 chips（null = 全部）+ 可选右侧"换一题"（固定行高保证两页对齐）
-        Row(
+        // 右侧：难度选择（收缩式下拉，与分类同款式）
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .weight(1f)
+                .onSizeChanged {
+                    difficultyButtonHeight = it.height
+                    difficultyButtonWidth = it.width
+                },
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                DifficultyChip("全部", selected = difficulty == null, onClick = { onSelectDifficulty(null) })
-                DifficultyChip("简单", selected = difficulty == 1, onClick = { onSelectDifficulty(1) })
-                DifficultyChip("中等", selected = difficulty == 2, onClick = { onSelectDifficulty(2) })
-                DifficultyChip("困难", selected = difficulty == 3, onClick = { onSelectDifficulty(3) })
-            }
-            if (onShuffle != null) {
-                IconButton(onClick = onShuffle) {
-                    Icon(
-                        imageVector = MiuixIcons.Refresh,
-                        contentDescription = "换一题",
-                        tint = MiuixTheme.colorScheme.onBackgroundVariant,
-                        modifier = Modifier.size(20.dp),
+            FilterDropdownButton(
+                label = currentDifficultyName,
+                expanded = difficultyMenuExpanded,
+                onClick = { difficultyMenuExpanded = true },
+            )
+            if (difficultyMenuExpanded) {
+                Popup(
+                    alignment = Alignment.TopStart,
+                    offset = IntOffset(0, difficultyButtonHeight + with(density) { 4.dp.roundToPx() }),
+                    onDismissRequest = { difficultyMenuExpanded = false },
+                    properties = PopupProperties(focusable = true),
+                ) {
+                    // 面板宽度与按钮对齐（= 各自半边），不越界
+                    DifficultyDropdownPanel(
+                        difficulty = difficulty,
+                        panelWidth = with(density) { difficultyButtonWidth.toDp() },
+                        onSelect = { d ->
+                            onSelectDifficulty(d)
+                            difficultyMenuExpanded = false
+                        },
                     )
                 }
             }
@@ -141,25 +145,85 @@ fun CategoryFilterBar(
     }
 }
 
+/**
+ * 收缩式筛选按钮：与展开面板同宽（占满各自半边）、胶囊背景 + 当前值左对齐；
+ * 箭头固定在右端：收起时单向右箭头，展开时向下箭头。
+ */
 @Composable
-private fun DifficultyChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
+private fun FilterDropdownButton(
+    label: String,
+    expanded: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
         modifier = Modifier
+            .fillMaxWidth()
             .clip(RoundedCornerShape(percent = 50))
-            .background(
-                if (selected) MiuixTheme.colorScheme.primary
-                else MiuixTheme.colorScheme.surfaceContainer,
-            )
+            .background(MiuixTheme.colorScheme.surfaceContainer)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 6.dp),
+            .padding(start = 14.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = label,
             fontSize = 13.sp,
-            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-            color = if (selected) MiuixTheme.colorScheme.onPrimary
-            else MiuixTheme.colorScheme.onSurfaceContainer,
+            color = MiuixTheme.colorScheme.onSurfaceContainer,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
+        if (expanded) {
+            // 展开态：单向下箭头
+            Icon(
+                imageVector = MiuixIcons.ExpandMore,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onBackgroundVariant,
+                modifier = Modifier.size(16.dp),
+            )
+        } else {
+            // 收起态：单向右箭头
+            Icon(
+                imageVector = MiuixIcons.ChevronForward,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onBackgroundVariant,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+/** 难度数值 → 展示文案（null = 全部） */
+private fun difficultyLabel(d: Int?): String = when (d) {
+    null -> "全部"
+    1 -> "简单"
+    2 -> "中等"
+    3 -> "困难"
+    else -> "全部"
+}
+
+/** 难度下拉面板 */
+@Composable
+private fun DifficultyDropdownPanel(
+    difficulty: Int?,
+    panelWidth: Dp,
+    onSelect: (Int?) -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .width(panelWidth)
+            .dropShadow(
+                shape = RoundedCornerShape(16.dp),
+                shadow = Shadow(radius = 12.dp, color = Color.Black, alpha = 0.15f),
+            ),
+        cornerRadius = 16.dp,
+        insideMargin = PaddingValues(0.dp),
+    ) {
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+            DropdownRow("全部", isSelected = difficulty == null, onClick = { onSelect(null) })
+            DropdownRow("简单", isSelected = difficulty == 1, onClick = { onSelect(1) })
+            DropdownRow("中等", isSelected = difficulty == 2, onClick = { onSelect(2) })
+            DropdownRow("困难", isSelected = difficulty == 3, onClick = { onSelect(3) })
+        }
     }
 }
 
@@ -168,11 +232,12 @@ private fun DifficultyChip(label: String, selected: Boolean, onClick: () -> Unit
 private fun CategoryDropdownPanel(
     categories: List<Category>,
     selectedCategoryId: Long?,
+    panelWidth: Dp,
     onSelect: (Long?) -> Unit,
 ) {
     Card(
         modifier = Modifier
-            .widthIn(min = 200.dp, max = 280.dp)
+            .width(panelWidth)
             .dropShadow(
                 shape = RoundedCornerShape(16.dp),
                 shadow = Shadow(radius = 12.dp, color = Color.Black, alpha = 0.15f),

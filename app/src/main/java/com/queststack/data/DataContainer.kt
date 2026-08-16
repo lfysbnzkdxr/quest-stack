@@ -8,6 +8,8 @@ import com.queststack.data.backup.WebDavClient
 import com.queststack.data.db.AppDatabase
 import com.queststack.data.repository.CategoryRepository
 import com.queststack.data.repository.CategoryRepositoryImpl
+import com.queststack.data.repository.PracticeLogRepository
+import com.queststack.data.repository.PracticeLogRepositoryImpl
 import com.queststack.data.repository.QuestionRepository
 import com.queststack.data.repository.QuestionRepositoryImpl
 import com.queststack.data.repository.SettingsRepository
@@ -33,6 +35,8 @@ object DataContainer {
         private set
     lateinit var backupRepository: BackupRepository
         private set
+    lateinit var practiceLogRepository: PracticeLogRepository
+        private set
     lateinit var webDavClient: WebDavClient
         private set
 
@@ -49,11 +53,12 @@ object DataContainer {
 
     fun init(context: Context) {
         database = AppDatabase.getInstance(context)
-        questionRepository = QuestionRepositoryImpl(database, database.questionDao(), database.roundDao())
+        questionRepository = QuestionRepositoryImpl(database, database.questionDao())
         categoryRepository = CategoryRepositoryImpl(database.categoryDao())
         settingsRepository = SettingsRepository(context)
         aiClient = AiClient(okHttpClient)
-        backupRepository = BackupRepository(database.questionDao(), database.categoryDao(), database.roundDao())
+        backupRepository = BackupRepository(database.questionDao(), database.categoryDao())
+        practiceLogRepository = PracticeLogRepositoryImpl(database.practiceLogDao())
         webDavClient = WebDavClient(
             OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)

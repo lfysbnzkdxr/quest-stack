@@ -52,14 +52,20 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.Check
+import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-fun AddScreen(viewModel: AddViewModel = viewModel()) {
+fun AddScreen(
+    onBack: () -> Unit,
+    viewModel: AddViewModel = viewModel(),
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -92,15 +98,39 @@ fun AddScreen(viewModel: AddViewModel = viewModel()) {
             answerState.edit { replace(0, length, uiState.answer) }
         }
     }
-    // 保存结果提示
+    // 保存结果提示：成功后自动返回题库
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-            viewModel.consumeMessage()
+            if (it == "已添加") {
+                viewModel.consumeMessage()
+                onBack()
+            } else {
+                viewModel.consumeMessage()
+            }
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            // 全屏 overlay 必须铺底，否则下面的 pager 内容透出来
+            .background(MiuixTheme.colorScheme.surface),
+    ) {
+        SmallTopAppBar(
+            title = "添加题目",
+            color = MiuixTheme.colorScheme.surface,
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = MiuixIcons.ChevronBackward,
+                        contentDescription = "返回",
+                        tint = MiuixTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            },
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -188,41 +218,15 @@ fun AddScreen(viewModel: AddViewModel = viewModel()) {
             }
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 标准化结果提示 + 追问链预览
-            if (uiState.standardizeDone) {
-                val roundsCount = uiState.roundsPreview?.size ?: 0
-                Text(
-                    text = if (roundsCount > 0) "已解析出 $roundsCount 轮追问（第一段作为主答案）"
-                    else "未解析出追问，仅保存主答案",
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            uiState.roundsPreview?.let { pairs ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    cornerRadius = 16.dp,
-                    insideMargin = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        pairs.forEachIndexed { index, (question, answer) ->
-                            RoundPreviewItem(index = index + 1, question = question, answer = answer)
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
             // AI 功能区：未配置接口时按钮禁用，点击兜底 Toast 提示
             if (uiState.title.isNotBlank() && uiState.answer.isBlank()) {
-                // 标题已填、答案为空 → 主按钮：AI 生成追问链
+                // 标题已填、答案为空 → 主按钮：AI 生成答案
                 Button(
                     onClick = {
                         if (!aiConfigured) {
                             Toast.makeText(context, "请先在设置中配置 AI 接口", Toast.LENGTH_SHORT).show()
                         } else {
-                            viewModel.generateChain()
+                            viewModel.generateAnswer()
                         }
                     },
                     enabled = aiConfigured && !uiState.aiBusy,
@@ -232,7 +236,7 @@ fun AddScreen(viewModel: AddViewModel = viewModel()) {
                         .height(44.dp),
                 ) {
                     Text(
-                        text = if (uiState.aiBusy) "AI 处理中…" else "AI 生成追问链",
+                        text = if (uiState.aiBusy) "AI 处理中…" else "AI 生成答案",
                         fontSize = 14.sp,
                     )
                 }
@@ -319,24 +323,6 @@ private fun DifficultyChip(label: String, selected: Boolean, onClick: () -> Unit
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
             color = if (selected) MiuixTheme.colorScheme.onPrimary
             else MiuixTheme.colorScheme.onSurfaceContainer,
-        )
-    }
-}
-
-@Composable
-private fun RoundPreviewItem(index: Int, question: String, answer: String) {
-    Column {
-        Text(
-            text = "第 $index 问：$question",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onBackground,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "参考答案：${answer.ifBlank { "（空）" }}",
-            fontSize = 13.sp,
-            color = MiuixTheme.colorScheme.onBackgroundVariant,
         )
     }
 }

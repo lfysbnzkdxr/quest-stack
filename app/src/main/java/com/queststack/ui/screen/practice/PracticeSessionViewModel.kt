@@ -1,0 +1,133 @@
+package com.queststack.ui.screen.practice
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.queststack.data.DataContainer
+import com.queststack.data.db.Category
+import com.queststack.data.db.PracticeLogEntity
+import com.queststack.data.db.Question
+import com.queststack.data.repository.CategoryRepository
+import com.queststack.data.repository.PracticeLogRepository
+import com.queststack.data.repository.QuestionRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+/**
+ * 一次闪卡练题会话：
+ * - categoryId / difficulty 为空表示不限（全库）；
+ * - startQuestionId 非空时（从题库点击进入）优先展示该题，之后随机换题。
+ */
+data class PracticeSession(
+    val categoryId: Long? = null,
+    val difficulty: Int? = null,
+    val startQuestionId: Long? = null,
+)
+
+data class PracticeSessionUiState(
+    val categories: List<Category> = emptyList(),
+    val selectedCategoryId: Long? = null,
+    val difficulty: Int? = null,
+    val current: Question? = null,
+    val revealed: Boolean = false,
+    val loading: Boolean = true,
+    val empty: Boolean = false,
+)
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class PracticeSessionViewModel(
+    private val session: PracticeSession,
+    private val questionRepository: QuestionRepository = DataContainer.questionRepository,
+    private val categoryRepository: CategoryRepository = DataContainer.categoryRepository,
+    private val practiceLogRepository: PracticeLogRepository = DataContainer.practiceLogRepository,
+) : ViewModel() {
+
+    private val _selectedCategoryId = MutableStateFlow(session.categoryId)
+    private val _difficulty = MutableStateFlow(session.difficulty)
+    private val _nextTick = MutableStateFlow(0)
+    private var firstLoad = true
+
+    private val _uiState = MutableStateFlow(
+        PracticeSessionUiState(
+            selectedCategoryId = session.categoryId,
+            difficulty = session.difficulty,
+        )
+    )
+    val uiState: StateFlow<PracticeSessionUiState> = _uiState.asStateFlow()
+
+    init {
+        // 分类列表独立收集
+        viewModelScope.launch {
+            categoryRepository.observeCategories().collect { categories ->
+                _uiState.update { it.copy(categories = categories) }
+            }
+        }
+        // 筛选 / 换题触发重抽：flatMapLatest 取消旧加载并重新随机
+        viewModelScope.launch {
+            combine(_selectedCategoryId, _difficulty, _nextTick) { c, d, _ -> c to d }
+                .flatMapLatest { (categoryId, difficulty) ->
+                    flow {
+                        _uiState.update { it.copy(loading = true, revealed = false) }
+                        emit(loadRandom(categoryId, difficulty))
+                    }
+                }
+                .collect { current ->
+                    _uiState.update {
+                        it.copy(current = current, loading = false, empty = current == null)
+                    }
+                }
+        }
+    }
+
+    /** 范围内随机抽题：首次优先展示会话指定题，之后排除当前题避免连出同一道 */
+    private suspend fun loadRandom(categoryId: Long?, difficulty: Int?): Question? {
+        val ids = questionRepository.randomQuestionIds(categoryId, difficulty)
+        if (ids.isEmpty()) return null
+        val target = when {
+            firstLoad && session.startQuestionId != null && ids.contains(session.startQuestionId) ->
+                session.startQuestionId
+            else -> ids.firstOrNull { it != _uiState.value.current?.id } ?: ids.first()
+        }
+        firstLoad = false
+        return questionRepository.getQuestion(target)
+    }
+
+    fun selectCategory(id: Long?) {
+        if (_selectedCategoryId.value != id) _selectedCategoryId.value = id
+        _uiState.update { it.copy(selectedCategoryId = id) }
+    }
+
+    fun selectDifficulty(d: Int?) {
+        if (_difficulty.value != d) _difficulty.value = d
+        _uiState.update { it.copy(difficulty = d) }
+    }
+
+    fun revealAnswer() {
+        _uiState.update { it.copy(revealed = true) }
+    }
+
+    /** 下一题：把刚看完答案的这题写入练题记录，再随机重抽并收起答案 */
+    fun next() {
+        _uiState.value.current?.let { current ->
+            val categoryName =
+                _uiState.value.categories.firstOrNull { it.id == current.categoryId }?.name
+            viewModelScope.launch {
+                practiceLogRepository.insert(
+                    PracticeLogEntity(
+                        questionTitle = current.title,
+                        categoryName = categoryName,
+                        difficulty = current.difficulty,
+                        practicedAt = System.currentTimeMillis(),
+                    )
+                )
+            }
+        }
+        _nextTick.value++
+    }
+}

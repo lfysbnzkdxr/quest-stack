@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.queststack.data.DataContainer
 import com.queststack.data.db.Category
-import com.queststack.data.db.QuestionWithRounds
+import com.queststack.data.db.Question
 import com.queststack.data.repository.CategoryRepository
 import com.queststack.data.repository.QuestionRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,7 +20,7 @@ data class LibraryUiState(
     val categories: List<Category> = emptyList(),
     val selectedCategoryId: Long? = null,
     val difficulty: Int? = null,
-    val questions: List<QuestionWithRounds> = emptyList(),
+    val questions: List<Question> = emptyList(),
     val loading: Boolean = true,
 )
 
@@ -65,9 +65,9 @@ class LibraryViewModel(
         _uiState.update { it.copy(difficulty = d) }
     }
 
-    fun deleteQuestion(question: QuestionWithRounds) {
+    fun deleteQuestion(question: Question) {
         viewModelScope.launch {
-            questionRepository.deleteQuestion(question.question.id)
+            questionRepository.deleteQuestion(question.id)
         }
     }
 }

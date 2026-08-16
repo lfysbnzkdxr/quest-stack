@@ -10,3 +10,6 @@ build/
 local.properties
 *.apk
 *.aab
+# 临时排错产物（miuix 源码导出 / kotlin_module 构建产物），不入库
+/top/
+/META-INF/

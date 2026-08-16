@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -31,8 +32,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.queststack.data.db.Category
-import com.queststack.data.db.QuestionWithRounds
+import com.queststack.data.db.Question
 import com.queststack.ui.component.CategoryFilterBar
+import com.queststack.ui.component.PageScaffold
+import com.queststack.ui.screen.practice.PracticeSession
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -41,6 +44,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -62,31 +66,56 @@ private fun difficultyColor(d: Int): Color = when (d) {
 
 @Composable
 fun LibraryScreen(
-    onQuestionClick: (Long) -> Unit,
+    onStartPractice: (PracticeSession) -> Unit,
+    onAddClick: () -> Unit,
     viewModel: LibraryViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var deleteTarget by remember { mutableStateOf<QuestionWithRounds?>(null) }
+    var deleteTarget by remember { mutableStateOf<Question?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        CategoryFilterBar(
-            categories = uiState.categories,
-            selectedCategoryId = uiState.selectedCategoryId,
-            difficulty = uiState.difficulty,
-            onSelectCategory = viewModel::selectCategory,
-            onSelectDifficulty = viewModel::selectDifficulty,
-        )
-        when {
-            uiState.loading -> LoadingPlaceholder()
-            uiState.questions.isEmpty() -> EmptyPlaceholder(
-                hasFilter = uiState.selectedCategoryId != null || uiState.difficulty != null,
-            )
-            else -> QuestionList(
-                questions = uiState.questions,
+    PageScaffold(
+        title = "题库",
+        actions = {
+            IconButton(onClick = onAddClick) {
+                Icon(
+                    imageVector = MiuixIcons.Add,
+                    contentDescription = "添加题目",
+                    tint = MiuixTheme.colorScheme.onBackground,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        },
+    ) { scrollBehavior ->
+        Column(modifier = Modifier.fillMaxSize()) {
+            CategoryFilterBar(
                 categories = uiState.categories,
-                onQuestionClick = onQuestionClick,
-                onDelete = { deleteTarget = it },
+                selectedCategoryId = uiState.selectedCategoryId,
+                difficulty = uiState.difficulty,
+                onSelectCategory = viewModel::selectCategory,
+                onSelectDifficulty = viewModel::selectDifficulty,
             )
+            when {
+                uiState.loading -> LoadingPlaceholder()
+                uiState.questions.isEmpty() -> EmptyPlaceholder(
+                    hasFilter = uiState.selectedCategoryId != null || uiState.difficulty != null,
+                )
+                else -> QuestionList(
+                    questions = uiState.questions,
+                    categories = uiState.categories,
+                    scrollBehavior = scrollBehavior,
+                    onQuestionClick = { question ->
+                        // 以当前筛选为范围、从该题开始闪卡练题
+                        onStartPractice(
+                            PracticeSession(
+                                categoryId = uiState.selectedCategoryId,
+                                difficulty = uiState.difficulty,
+                                startQuestionId = question.id,
+                            ),
+                        )
+                    },
+                    onDelete = { deleteTarget = it },
+                )
+            }
         }
     }
 
@@ -104,22 +133,25 @@ fun LibraryScreen(
 
 @Composable
 private fun QuestionList(
-    questions: List<QuestionWithRounds>,
+    questions: List<Question>,
     categories: List<Category>,
-    onQuestionClick: (Long) -> Unit,
-    onDelete: (QuestionWithRounds) -> Unit,
+    scrollBehavior: top.yukonga.miuix.kmp.basic.ScrollBehavior,
+    onQuestionClick: (Question) -> Unit,
+    onDelete: (Question) -> Unit,
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        items(questions, key = { it.question.id }) { item ->
+        items(questions, key = { it.id }) { question ->
             QuestionCard(
-                item = item,
+                question = question,
                 categories = categories,
-                onQuestionClick = { onQuestionClick(item.question.id) },
-                onDelete = { onDelete(item) },
+                onQuestionClick = { onQuestionClick(question) },
+                onDelete = { onDelete(question) },
             )
         }
     }
@@ -127,12 +159,11 @@ private fun QuestionList(
 
 @Composable
 private fun QuestionCard(
-    item: QuestionWithRounds,
+    question: Question,
     categories: List<Category>,
     onQuestionClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val question = item.question
     val categoryName = categories.firstOrNull { it.id == question.categoryId }?.name ?: "未分类"
 
     Card(
@@ -179,11 +210,6 @@ private fun QuestionCard(
                     fontWeight = FontWeight.Medium,
                     color = difficultyColor(question.difficulty),
                 )
-                Text(
-                    text = "${item.rounds.size} 轮追问",
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                )
             }
         }
     }
@@ -191,7 +217,7 @@ private fun QuestionCard(
 
 @Composable
 private fun DeleteConfirmDialog(
-    target: QuestionWithRounds,
+    target: Question,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -210,7 +236,7 @@ private fun DeleteConfirmDialog(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "确定要删除「${target.question.title}」吗？该题及其追问轮次都会被移除，且无法恢复。",
+                    text = "确定要删除「${target.title}」吗？该题会被移除，且无法恢复。",
                     fontSize = 14.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
@@ -266,7 +292,7 @@ private fun EmptyPlaceholder(hasFilter: Boolean) {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = if (hasFilter) "换个筛选条件试试" else "去「添加」页创建第一道题吧",
+                text = if (hasFilter) "换个筛选条件试试" else "点右上角「+」创建第一道题吧",
                 fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
             )
