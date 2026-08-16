@@ -26,8 +26,6 @@ data class AddUiState(
     val difficulty: Int = 1,
     val title: String = "",
     val answer: String = "",
-    val roundsPreview: List<Pair<String, String>>? = null,
-    val standardizeDone: Boolean = false,
     val saving: Boolean = false,
     val message: String? = null,
     val aiBusy: Boolean = false,
@@ -76,26 +74,15 @@ class AddViewModel(
         _uiState.update { it.copy(difficulty = d) }
     }
 
-    /** 按本地规则解析答案中的问答对：第一对 → 主答案，其余 → 追问链预览 */
+    /** 标准化答案文本（统一换行、去除首尾空白），原子问题不做问答对拆分 */
     fun standardize() {
         val current = _uiState.value
-        val pairs = TextStandardizer.parseQaPairs(current.answer)
-        val mainAnswer: String
-        val followUps: List<Pair<String, String>>
-        if (pairs.isEmpty()) {
-            mainAnswer = current.answer
-            followUps = emptyList()
-        } else {
-            val first = pairs.first()
-            mainAnswer = first.second.ifBlank { first.first }
-            followUps = pairs.drop(1)
-        }
+        if (current.answer.isBlank()) return
         _uiState.update {
             it.copy(
-                answer = mainAnswer,
-                roundsPreview = followUps.ifEmpty { null },
-                standardizeDone = true,
+                answer = TextStandardizer.normalize(current.answer),
                 title = TextStandardizer.normalize(current.title),
+                message = "已标准化格式",
             )
         }
     }
@@ -121,8 +108,8 @@ class AddViewModel(
         _uiState.update { it.copy(aiBusy = false, message = message) }
     }
 
-    /** AI 生成追问链：第一轮答案作为主答案，后续轮次作为追问链预览 */
-    fun generateChain() {
+    /** AI 生成参考答案：结果写回答案输入框 */
+    fun generateAnswer() {
         val current = _uiState.value
         if (current.aiBusy || current.title.isBlank() || current.answer.isNotBlank()) return
         val config = requireAiConfig()
@@ -134,11 +121,11 @@ class AddViewModel(
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 try {
-                    val rounds = aiClient.generateQuestionChain(
+                    val answer = aiClient.generateAnswer(
                         config.baseUrl, config.apiKey, config.model, current.title,
                         timeoutSeconds = config.timeoutSeconds,
                     )
-                    if (rounds.isEmpty()) {
+                    if (answer.isBlank()) {
                         _uiState.update {
                             it.copy(aiBusy = false, message = "AI 未返回有效内容，请重试")
                         }
@@ -147,10 +134,8 @@ class AddViewModel(
                     _uiState.update {
                         it.copy(
                             aiBusy = false,
-                            answer = rounds.first().second,
-                            roundsPreview = rounds.drop(1).ifEmpty { null },
-                            standardizeDone = false,
-                            message = "AI 生成 ${rounds.size} 轮内容（可预览后保存）",
+                            answer = answer,
+                            message = "AI 已生成答案（可预览后保存）",
                         )
                     }
                 } catch (e: Exception) {
@@ -160,7 +145,7 @@ class AddViewModel(
         }
     }
 
-    /** AI 优化表述：结果写回答案输入框（旧轮次预览作废，避免保存到过期内容） */
+    /** AI 优化表述：结果写回答案输入框 */
     fun optimizeAnswer() {
         val current = _uiState.value
         if (current.aiBusy || current.answer.isBlank()) return
@@ -181,8 +166,6 @@ class AddViewModel(
                         it.copy(
                             aiBusy = false,
                             answer = optimized,
-                            roundsPreview = null,
-                            standardizeDone = false,
                             message = "已优化表述",
                         )
                     }
@@ -193,7 +176,7 @@ class AddViewModel(
         }
     }
 
-    /** AI 优化格式：第一轮答案作为主答案，后续轮次作为追问链预览 */
+    /** AI 优化格式：整理答案文本结构并写回答案输入框 */
     fun formatAnswer() {
         val current = _uiState.value
         if (current.aiBusy || current.answer.isBlank()) return
@@ -206,11 +189,11 @@ class AddViewModel(
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 try {
-                    val rounds = aiClient.formatAnswer(
+                    val formatted = aiClient.formatAnswer(
                         config.baseUrl, config.apiKey, config.model, current.title, current.answer,
                         timeoutSeconds = config.timeoutSeconds,
                     )
-                    if (rounds.isEmpty()) {
+                    if (formatted.isBlank()) {
                         _uiState.update {
                             it.copy(aiBusy = false, message = "AI 未返回有效内容，请重试")
                         }
@@ -219,10 +202,8 @@ class AddViewModel(
                     _uiState.update {
                         it.copy(
                             aiBusy = false,
-                            answer = rounds.first().second,
-                            roundsPreview = rounds.drop(1).ifEmpty { null },
-                            standardizeDone = false,
-                            message = "已按 AI 整理为 ${rounds.size} 轮内容",
+                            answer = formatted,
+                            message = "已按 AI 整理格式",
                         )
                     }
                 } catch (e: Exception) {
@@ -232,11 +213,10 @@ class AddViewModel(
         }
     }
 
-    /** 校验 title 非空后入库；roundsPreview 为追问链，主答案存 question.answer */
+    /** 校验 title 非空后入库；答案存 question.answer */
     fun save() {
         val current = _uiState.value
         if (current.title.isBlank() || current.saving) return
-        val rounds = current.roundsPreview.orEmpty()
         viewModelScope.launch {
             _uiState.update { it.copy(saving = true, message = null) }
             try {
@@ -245,15 +225,12 @@ class AddViewModel(
                     answer = current.answer,
                     categoryId = current.selectedCategoryId,
                     difficulty = current.difficulty,
-                    rounds = rounds,
                 )
                 _uiState.update {
                     it.copy(
                         saving = false,
                         title = "",
                         answer = "",
-                        roundsPreview = null,
-                        standardizeDone = false,
                         message = "已添加",
                     )
                 }

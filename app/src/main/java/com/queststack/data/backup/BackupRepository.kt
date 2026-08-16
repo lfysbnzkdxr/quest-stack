@@ -4,39 +4,38 @@ import com.queststack.data.db.Category
 import com.queststack.data.db.CategoryDao
 import com.queststack.data.db.Question
 import com.queststack.data.db.QuestionDao
-import com.queststack.data.db.QuestionWithRounds
-import com.queststack.data.db.Round
-import com.queststack.data.db.RoundDao
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 /**
  * 备份数据仓库：JSON 导出/导入（本地文件），追加合并、不覆盖现有数据。
+ *
+ * 导出为 v3 格式（原子问题，无追问链）；兼容导入 v1/v2 旧文件：
+ * v1 的 rounds 首轮答案提升为主答案，其余轮次丢弃。
  */
 class BackupRepository(
     private val questionDao: QuestionDao,
-    private val categoryDao: CategoryDao,
-    private val roundDao: RoundDao
+    private val categoryDao: CategoryDao
 ) {
 
     private val json = Json {
         prettyPrint = true
-        encodeDefaults = true
+        // 不输出默认值：v3 文件不再包含 rounds/空 answer 字段
+        encodeDefaults = false
         ignoreUnknownKeys = true
     }
 
     /** 导出全部数据为 JSON 字符串 */
     suspend fun exportToJson(): String {
         val categories = categoryDao.observeAll().first()
-        val questions = questionDao.observeAllWithRounds().first()
+        val questions = questionDao.observeAll().first()
         val categoryNameById = categories.associate { it.id to it.name }
         val backupFile = BackupFile(
             version = CURRENT_BACKUP_VERSION,
             exportedAt = System.currentTimeMillis(),
             categories = categories.map { BackupCategory(it.name, it.sortOrder) },
-            questions = questions.map { qwr ->
-                val q = qwr.question
+            questions = questions.map { q ->
                 BackupQuestion(
                     title = q.title,
                     answer = q.answer,
@@ -44,9 +43,6 @@ class BackupRepository(
                     difficulty = q.difficulty,
                     createdAt = q.createdAt,
                     updatedAt = q.updatedAt,
-                    rounds = qwr.rounds.sortedBy { it.orderIndex }.map {
-                        BackupRound(it.orderIndex, it.question, it.answer, it.source)
-                    }
                 )
             }
         )
@@ -81,20 +77,19 @@ class BackupRepository(
         }
 
         // 题目：按 title 去重，同名跳过
-        val existingTitles = questionDao.observeAllWithRounds().first()
-            .map { it.question.title }
+        val existingTitles = questionDao.observeAll().first()
+            .map { it.title }
             .toHashSet()
         var importedCount = 0
         for (backupQuestion in backupFile.questions) {
             if (backupQuestion.title in existingTitles) continue // 不重复导入
-            // v1 兼容：rounds 含"第 0 轮 = 主问题"，其 answer 迁入 question.answer，其余轮次作为追问链重排
-            val (mainAnswer, followUpRounds) = if (backupFile.version >= 2) {
-                backupQuestion.answer to backupQuestion.rounds
+            // v1 兼容：rounds 含"第 0 轮 = 主问题"，其 answer 迁入主答案；v2/v3 直接用 answer
+            val mainAnswer = if (backupFile.version >= 2) {
+                backupQuestion.answer
             } else {
-                val sorted = backupQuestion.rounds.sortedBy { it.orderIndex }
-                (sorted.firstOrNull()?.answer ?: "") to sorted.drop(1)
+                backupQuestion.rounds.sortedBy { it.orderIndex }.firstOrNull()?.answer ?: ""
             }
-            val questionId = questionDao.insert(
+            questionDao.insert(
                 Question(
                     title = backupQuestion.title,
                     answer = mainAnswer,
@@ -104,19 +99,6 @@ class BackupRepository(
                     updatedAt = backupQuestion.updatedAt
                 )
             )
-            if (followUpRounds.isNotEmpty()) {
-                roundDao.insertAll(
-                    followUpRounds.mapIndexed { index, round ->
-                        Round(
-                            questionId = questionId,
-                            orderIndex = index,
-                            question = round.question,
-                            answer = round.answer,
-                            source = round.source
-                        )
-                    }
-                )
-            }
             existingTitles.add(backupQuestion.title)
             importedCount++
         }
@@ -124,6 +106,6 @@ class BackupRepository(
     }
 
     companion object {
-        const val CURRENT_BACKUP_VERSION = 2
+        const val CURRENT_BACKUP_VERSION = 3
     }
 }

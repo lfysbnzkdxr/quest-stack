@@ -4,12 +4,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -45,21 +43,21 @@ class AiClient(private val okHttpClient: OkHttpClient) {
         return content ?: throw IllegalStateException("AI 响应中缺少 choices[0].message.content")
     }
 
-    /** 生成追问链：返回（question, answer）轮次列表，至少 1 轮 */
-    suspend fun generateQuestionChain(
+    /** 生成参考答案：返回回答文本 */
+    suspend fun generateAnswer(
         baseUrl: String,
         apiKey: String,
         model: String,
         title: String,
         timeoutSeconds: Int = DEFAULT_TIMEOUT_SECONDS
-    ): List<Pair<String, String>> {
-        val system = "你是一个面试官。根据给定问题生成追问链：第一轮是问题本身（question=原问题，answer=详细参考答案），" +
-            "后续 2-3 轮为追问与参考答案。只输出 JSON，格式：{\"rounds\":[{\"question\":\"...\",\"answer\":\"...\"}]}"
+    ): String {
+        val system = "你是一个面试辅导专家。针对给出的面试问题编写一份详细、结构清晰的参考答案。" +
+            "直接输出回答文本，不要加任何前缀说明。"
         val body = chatRequestBody(
             model,
             listOf(ChatMessage("system", system), ChatMessage("user", title))
         )
-        return parseRounds(execute(buildRequest(chatCompletionsUrl(baseUrl), apiKey, body), timeoutSeconds))
+        return execute(buildRequest(chatCompletionsUrl(baseUrl), apiKey, body), timeoutSeconds).trim()
     }
 
     /** 润色回答：返回润色后的文本 */
@@ -80,7 +78,7 @@ class AiClient(private val okHttpClient: OkHttpClient) {
         return execute(buildRequest(chatCompletionsUrl(baseUrl), apiKey, body), timeoutSeconds).trim()
     }
 
-    /** 整理自由填写的问答文本为结构化问答链 */
+    /** 整理自由填写的问答文本为结构化参考答案 */
     suspend fun formatAnswer(
         baseUrl: String,
         apiKey: String,
@@ -88,14 +86,14 @@ class AiClient(private val okHttpClient: OkHttpClient) {
         title: String,
         answer: String,
         timeoutSeconds: Int = DEFAULT_TIMEOUT_SECONDS
-    ): List<Pair<String, String>> {
-        val system = "将以下面试问答内容整理为结构化问答链，输出 JSON {\"rounds\":[{\"question\":\"...\",\"answer\":\"...\"}]}，" +
-            "第一轮 question 是原问题，后续轮次是合理追问及参考答案；若内容无法拆分，也至少输出一轮。"
+    ): String {
+        val system = "将以下面试问答内容整理为一份结构清晰、条理分明的参考答案。" +
+            "直接输出整理后的回答文本，不要加任何前缀说明。"
         val body = chatRequestBody(
             model,
             listOf(ChatMessage("system", system), ChatMessage("user", "问题：$title\n\n内容：$answer"))
         )
-        return parseRounds(execute(buildRequest(chatCompletionsUrl(baseUrl), apiKey, body), timeoutSeconds))
+        return execute(buildRequest(chatCompletionsUrl(baseUrl), apiKey, body), timeoutSeconds).trim()
     }
 
     /** 构建 {baseUrl}/v1/chat/completions，baseUrl 已含 /v1 则不重复加 */
@@ -140,22 +138,6 @@ class AiClient(private val okHttpClient: OkHttpClient) {
             }
         }
 
-    /** 提取响应体中第一个 { 到最后一个 } 的 JSON，解析为 rounds 列表（至少 1 轮，否则抛 IllegalArgumentException） */
-    private fun parseRounds(responseBody: String): List<Pair<String, String>> {
-        val start = responseBody.indexOf('{')
-        val end = responseBody.lastIndexOf('}')
-        if (start < 0 || end <= start) {
-            throw IllegalArgumentException("AI 返回内容不是有效 JSON")
-        }
-        val rounds = json.decodeFromJsonElement<RoundsResponse>(
-            json.parseToJsonElement(responseBody.substring(start, end + 1))
-        ).rounds
-        if (rounds.isEmpty()) {
-            throw IllegalArgumentException("AI 返回的问答链为空")
-        }
-        return rounds.map { it.question to it.answer }
-    }
-
     companion object {
         const val DEFAULT_TIMEOUT_SECONDS = 30
 
@@ -163,9 +145,3 @@ class AiClient(private val okHttpClient: OkHttpClient) {
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }
-
-@Serializable
-private data class RoundsResponse(val rounds: List<RoundItem>)
-
-@Serializable
-private data class RoundItem(val question: String, val answer: String)

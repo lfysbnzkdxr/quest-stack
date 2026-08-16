@@ -14,8 +14,8 @@ data class BackupQuestion(
     val difficulty: Int,
     val createdAt: Long,
     val updatedAt: Long,
-    /** 追问链（纯追问轮次，不含主问题） */
-    val rounds: List<BackupRound>,
+    /** v1/v2 遗留字段：v3 起不再导出（默认空列表），仅用于兼容旧文件导入 */
+    val rounds: List<BackupRound> = emptyList(),
 )
 
 @Serializable
