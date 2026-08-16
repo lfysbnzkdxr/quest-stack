@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -47,6 +48,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.queststack.data.backup.WebDavConfig
 import com.queststack.data.db.Category
 import com.queststack.data.repository.AiConfig
+import com.queststack.ui.component.PageScaffold
 import com.queststack.ui.theme.AppSettings
 import com.queststack.ui.theme.ThemeMode
 import java.time.LocalDate
@@ -121,290 +123,293 @@ fun SettingsScreen(
     var deleteTarget by remember { mutableStateOf<Category?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        ) {
-            // 1. 外观（顶栏主题切换已移入内容区）
-            SettingsSectionCard("外观") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppThemeChip("跟随系统", ThemeMode.System, AppSettings.themeMode) {
-                        viewModel.setThemeMode(ThemeMode.System)
-                    }
-                    AppThemeChip("浅色", ThemeMode.Light, AppSettings.themeMode) {
-                        viewModel.setThemeMode(ThemeMode.Light)
-                    }
-                    AppThemeChip("深色", ThemeMode.Dark, AppSettings.themeMode) {
-                        viewModel.setThemeMode(ThemeMode.Dark)
+        PageScaffold(title = "设置") { scrollBehavior ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                // 1. 外观（顶栏主题切换已移入内容区）
+                SettingsSectionCard("外观") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AppThemeChip("跟随系统", ThemeMode.System, AppSettings.themeMode) {
+                            viewModel.setThemeMode(ThemeMode.System)
+                        }
+                        AppThemeChip("浅色", ThemeMode.Light, AppSettings.themeMode) {
+                            viewModel.setThemeMode(ThemeMode.Light)
+                        }
+                        AppThemeChip("深色", ThemeMode.Dark, AppSettings.themeMode) {
+                            viewModel.setThemeMode(ThemeMode.Dark)
+                        }
                     }
                 }
-            }
-
-            // 2. AI 配置
-            SettingsSectionCard("AI 接口") {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TextField(
-                        state = baseUrlState,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = "Base URL（示例 https://api.openai.com/v1）",
-                        useLabelAsPlaceholder = true,
-                        lineLimits = TextFieldLineLimits.SingleLine,
-                    )
-                    TextField(
-                        state = apiKeyState,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = "API Key",
-                        useLabelAsPlaceholder = true,
-                        lineLimits = TextFieldLineLimits.SingleLine,
-                    )
-                    TextField(
-                        state = modelState,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = "模型（示例 gpt-4o）",
-                        useLabelAsPlaceholder = true,
-                        lineLimits = TextFieldLineLimits.SingleLine,
-                    )
-                    TextField(
-                        state = timeoutState,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = "超时秒数（示例 30）",
-                        useLabelAsPlaceholder = true,
-                        lineLimits = TextFieldLineLimits.SingleLine,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    )
-                    Button(
-                        onClick = {
-                            val baseUrl = baseUrlState.text.toString().trim()
-                            val model = modelState.text.toString().trim()
-                            val apiKey = apiKeyState.text.toString().trim()
-                            val timeout = timeoutState.text.toString().trim().toIntOrNull() ?: 30
-                            when {
-                                baseUrl.isEmpty() ->
-                                    Toast.makeText(context, "Base URL 不能为空", Toast.LENGTH_SHORT).show()
-                                model.isEmpty() ->
-                                    Toast.makeText(context, "模型不能为空", Toast.LENGTH_SHORT).show()
-                                else -> {
-                                    viewModel.saveAiConfig(
-                                        AiConfig(
-                                            baseUrl = baseUrl,
-                                            apiKey = apiKey,
-                                            model = model,
-                                            timeoutSeconds = timeout,
-                                        ),
-                                    )
-                                    Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColorsPrimary(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp),
-                    ) {
-                        Text(text = "保存配置", fontSize = 14.sp)
-                    }
-                    Text(
-                        text = "AI 接口可选；未配置时 AI 功能不可用，本地功能不受影响",
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
-                    )
-                }
-            }
-
-            // 3. 分类管理
-            SettingsSectionCard("分类管理") {
-                if (uiState.categories.isEmpty()) {
-                    Text(
-                        text = "暂无分类",
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-                uiState.categories.forEachIndexed { index, category ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = category.name,
-                            fontSize = 15.sp,
-                            color = MiuixTheme.colorScheme.onBackground,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+    
+                // 2. AI 配置
+                SettingsSectionCard("AI 接口") {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        TextField(
+                            state = baseUrlState,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = "Base URL（示例 https://api.openai.com/v1）",
+                            useLabelAsPlaceholder = true,
+                            lineLimits = TextFieldLineLimits.SingleLine,
                         )
-                        IconButton(onClick = { renameTarget = category }) {
-                            Icon(
-                                imageVector = MiuixIcons.Edit,
-                                contentDescription = "重命名",
-                                tint = MiuixTheme.colorScheme.onBackgroundVariant,
-                                modifier = Modifier.size(18.dp),
-                            )
+                        TextField(
+                            state = apiKeyState,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = "API Key",
+                            useLabelAsPlaceholder = true,
+                            lineLimits = TextFieldLineLimits.SingleLine,
+                        )
+                        TextField(
+                            state = modelState,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = "模型（示例 gpt-4o）",
+                            useLabelAsPlaceholder = true,
+                            lineLimits = TextFieldLineLimits.SingleLine,
+                        )
+                        TextField(
+                            state = timeoutState,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = "超时秒数（示例 30）",
+                            useLabelAsPlaceholder = true,
+                            lineLimits = TextFieldLineLimits.SingleLine,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
+                        Button(
+                            onClick = {
+                                val baseUrl = baseUrlState.text.toString().trim()
+                                val model = modelState.text.toString().trim()
+                                val apiKey = apiKeyState.text.toString().trim()
+                                val timeout = timeoutState.text.toString().trim().toIntOrNull() ?: 30
+                                when {
+                                    baseUrl.isEmpty() ->
+                                        Toast.makeText(context, "Base URL 不能为空", Toast.LENGTH_SHORT).show()
+                                    model.isEmpty() ->
+                                        Toast.makeText(context, "模型不能为空", Toast.LENGTH_SHORT).show()
+                                    else -> {
+                                        viewModel.saveAiConfig(
+                                            AiConfig(
+                                                baseUrl = baseUrl,
+                                                apiKey = apiKey,
+                                                model = model,
+                                                timeoutSeconds = timeout,
+                                            ),
+                                        )
+                                        Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColorsPrimary(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp),
+                        ) {
+                            Text(text = "保存配置", fontSize = 14.sp)
                         }
-                        IconButton(onClick = { deleteTarget = category }) {
-                            Icon(
-                                imageVector = MiuixIcons.Delete,
-                                contentDescription = "删除",
-                                tint = MiuixTheme.colorScheme.onBackgroundVariant,
-                                modifier = Modifier.size(18.dp),
+                        Text(
+                            text = "AI 接口可选；未配置时 AI 功能不可用，本地功能不受影响",
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+                        )
+                    }
+                }
+    
+                // 3. 分类管理
+                SettingsSectionCard("分类管理") {
+                    if (uiState.categories.isEmpty()) {
+                        Text(
+                            text = "暂无分类",
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    uiState.categories.forEachIndexed { index, category ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = category.name,
+                                fontSize = 15.sp,
+                                color = MiuixTheme.colorScheme.onBackground,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
+                            IconButton(onClick = { renameTarget = category }) {
+                                Icon(
+                                    imageVector = MiuixIcons.Edit,
+                                    contentDescription = "重命名",
+                                    tint = MiuixTheme.colorScheme.onBackgroundVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                            IconButton(onClick = { deleteTarget = category }) {
+                                Icon(
+                                    imageVector = MiuixIcons.Delete,
+                                    contentDescription = "删除",
+                                    tint = MiuixTheme.colorScheme.onBackgroundVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                        if (index != uiState.categories.lastIndex) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            DividerLine()
+                            Spacer(modifier = Modifier.height(10.dp))
                         }
                     }
-                    if (index != uiState.categories.lastIndex) {
-                        Spacer(modifier = Modifier.height(10.dp))
+                    if (uiState.categories.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         DividerLine()
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                    TextButton(
+                        text = "+ 添加分类",
+                        onClick = { addDialogOpen = true },
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+    
+                // 4. 数据备份
+                SettingsSectionCard("数据备份") {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "本地",
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(
+                                onClick = { exportLauncher.launch(backupFileName()) },
+                                enabled = !uiState.busy,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = if (uiState.busy && uiState.busyAction == "local_export") "处理中…"
+                                    else "导出到本地",
+                                    fontSize = 13.sp,
+                                )
+                            }
+                            Button(
+                                onClick = { importLauncher.launch(arrayOf("application/json")) },
+                                enabled = !uiState.busy,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = if (uiState.busy && uiState.busyAction == "local_import") "处理中…"
+                                    else "从本地导入",
+                                    fontSize = 13.sp,
+                                )
+                            }
+                        }
+                        DividerLine()
+                        Text(
+                            text = "WebDAV",
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                        TextField(
+                            state = webDavUrlState,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = "WebDAV 地址",
+                            useLabelAsPlaceholder = true,
+                            lineLimits = TextFieldLineLimits.SingleLine,
+                        )
+                        TextField(
+                            state = webDavUserState,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = "用户名",
+                            useLabelAsPlaceholder = true,
+                            lineLimits = TextFieldLineLimits.SingleLine,
+                        )
+                        TextField(
+                            state = webDavPassState,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = "密码",
+                            useLabelAsPlaceholder = true,
+                            lineLimits = TextFieldLineLimits.SingleLine,
+                        )
+                        Button(
+                            onClick = {
+                                viewModel.saveWebDavConfig(
+                                    WebDavConfig(
+                                        url = webDavUrlState.text.toString().trim(),
+                                        username = webDavUserState.text.toString().trim(),
+                                        password = webDavPassState.text.toString().trim(),
+                                    ),
+                                )
+                                Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColorsPrimary(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp),
+                        ) {
+                            Text(text = "保存配置", fontSize = 14.sp)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(
+                                onClick = { viewModel.webDavBackup() },
+                                enabled = !uiState.busy,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = if (uiState.busy && uiState.busyAction == "webdav_backup") "处理中…"
+                                    else "备份到 WebDAV",
+                                    fontSize = 13.sp,
+                                )
+                            }
+                            Button(
+                                onClick = { viewModel.webDavRestore() },
+                                enabled = !uiState.busy,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = if (uiState.busy && uiState.busyAction == "webdav_restore") "处理中…"
+                                    else "从 WebDAV 恢复",
+                                    fontSize = 13.sp,
+                                )
+                            }
+                        }
+                        Text(
+                            text = "URL 为完整文件地址；备份/恢复固定使用文件名 quest-stack-backup.json，父目录不存在时会自动创建",
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+                        )
                     }
                 }
-                if (uiState.categories.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DividerLine()
-                    Spacer(modifier = Modifier.height(4.dp))
+    
+                // 5. 关于
+                SettingsSectionCard("关于") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "版本 0.1.0",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onBackground,
+                        )
+                        Text(
+                            text = "题栈 —— 本地面试练习助手。数据存储于本地，AI 功能可选。",
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        DividerLine()
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "UI 基于 Miuix (top.yukonga.miuix.kmp) · 图标来自 Miuix Icons",
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
+                        )
+                    }
                 }
-                TextButton(
-                    text = "+ 添加分类",
-                    onClick = { addDialogOpen = true },
-                    modifier = Modifier.padding(top = 6.dp),
-                )
+                Spacer(modifier = Modifier.height(20.dp))
             }
-
-            // 4. 数据备份
-            SettingsSectionCard("数据备份") {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "本地",
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(
-                            onClick = { exportLauncher.launch(backupFileName()) },
-                            enabled = !uiState.busy,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(
-                                text = if (uiState.busy && uiState.busyAction == "local_export") "处理中…"
-                                else "导出到本地",
-                                fontSize = 13.sp,
-                            )
-                        }
-                        Button(
-                            onClick = { importLauncher.launch(arrayOf("application/json")) },
-                            enabled = !uiState.busy,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(
-                                text = if (uiState.busy && uiState.busyAction == "local_import") "处理中…"
-                                else "从本地导入",
-                                fontSize = 13.sp,
-                            )
-                        }
-                    }
-                    DividerLine()
-                    Text(
-                        text = "WebDAV",
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                    TextField(
-                        state = webDavUrlState,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = "WebDAV 地址",
-                        useLabelAsPlaceholder = true,
-                        lineLimits = TextFieldLineLimits.SingleLine,
-                    )
-                    TextField(
-                        state = webDavUserState,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = "用户名",
-                        useLabelAsPlaceholder = true,
-                        lineLimits = TextFieldLineLimits.SingleLine,
-                    )
-                    TextField(
-                        state = webDavPassState,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = "密码",
-                        useLabelAsPlaceholder = true,
-                        lineLimits = TextFieldLineLimits.SingleLine,
-                    )
-                    Button(
-                        onClick = {
-                            viewModel.saveWebDavConfig(
-                                WebDavConfig(
-                                    url = webDavUrlState.text.toString().trim(),
-                                    username = webDavUserState.text.toString().trim(),
-                                    password = webDavPassState.text.toString().trim(),
-                                ),
-                            )
-                            Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColorsPrimary(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp),
-                    ) {
-                        Text(text = "保存配置", fontSize = 14.sp)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(
-                            onClick = { viewModel.webDavBackup() },
-                            enabled = !uiState.busy,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(
-                                text = if (uiState.busy && uiState.busyAction == "webdav_backup") "处理中…"
-                                else "备份到 WebDAV",
-                                fontSize = 13.sp,
-                            )
-                        }
-                        Button(
-                            onClick = { viewModel.webDavRestore() },
-                            enabled = !uiState.busy,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(
-                                text = if (uiState.busy && uiState.busyAction == "webdav_restore") "处理中…"
-                                else "从 WebDAV 恢复",
-                                fontSize = 13.sp,
-                            )
-                        }
-                    }
-                    Text(
-                        text = "URL 为完整文件地址；备份/恢复固定使用文件名 quest-stack-backup.json，父目录不存在时会自动创建",
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
-                    )
-                }
-            }
-
-            // 5. 关于
-            SettingsSectionCard("关于") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "版本 0.1.0",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = "题栈 —— 本地面试练习助手。数据存储于本地，AI 功能可选。",
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    DividerLine()
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "UI 基于 Miuix (top.yukonga.miuix.kmp) · 图标来自 Miuix Icons",
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 
