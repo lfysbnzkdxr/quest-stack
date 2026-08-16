@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -21,6 +22,12 @@ import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+/**
+ * 页面内容采集层，由 MainScreen 创建并挂载到内容容器上，
+ * 供玻璃顶栏 / 玻璃底栏模糊采样（参考 miuix example 的 LayerBackdrop 用法）。
+ */
+internal val LocalGlassBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
 
 /**
  * 带模糊效果的顶部栏（参考 MIUI 风格），顶栏背景向上延伸覆盖状态栏，
