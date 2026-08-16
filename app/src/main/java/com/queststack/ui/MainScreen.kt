@@ -1,15 +1,17 @@
 package com.queststack.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.SpringSpec
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -28,8 +30,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import com.queststack.ui.component.GlassNavigationBar
+import androidx.compose.ui.unit.sp
+import com.queststack.ui.component.FloatingBottomBar
+import com.queststack.ui.component.FloatingBottomBarItem
 import com.queststack.ui.component.LocalGlassBackdrop
+import com.queststack.ui.component.rememberMainPagerState
 import com.queststack.ui.screen.add.AddScreen
 import com.queststack.ui.screen.home.HomeScreen
 import com.queststack.ui.screen.library.LibraryScreen
@@ -38,8 +43,10 @@ import com.queststack.ui.screen.practice.PracticeSessionScreen
 import com.queststack.ui.screen.practiceLog.PracticeLogScreen
 import com.queststack.ui.screen.settings.SettingsScreen
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.NavigationItem
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -47,7 +54,6 @@ import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import kotlin.math.abs
 
 /** 底部导航 tab 定义（顺序即页面横滑顺序） */
 enum class MainTab(val icon: ImageVector, val label: String) {
@@ -59,7 +65,8 @@ enum class MainTab(val icon: ImageVector, val label: String) {
 /**
  * 主界面（参考 KernelSU 架构）：
  * - 无全局顶栏：HorizontalPager 全屏承载三个 Tab，每个 Tab 页自带顶栏随页面横滑；
- * - 底栏悬浮毛玻璃导航（采样全局 backdrop，overlay 在内容之上，不占用内容区域）；
+ * - 底栏为液态玻璃悬浮导航（KernelSU FloatingBottomBar 移植）：采样全局 backdrop，
+ *   overlay 在内容之上，可拖动指示器（松手才切页）、按压放大、重力感应高光；
  * - 闪卡练题 / 添加页为全屏 overlay，盖在 pager 之上；
  * - 分类练习弹窗的变暗遮罩在同一窗口绘制，避免独立 Popup 窗口导致状态栏闪烁/恢复。
  */
@@ -67,7 +74,7 @@ enum class MainTab(val icon: ImageVector, val label: String) {
 fun MainScreen() {
     val pagerState = rememberPagerState(pageCount = { MainTab.entries.size })
     val scope = rememberCoroutineScope()
-    var currentTabIndex by remember { mutableIntStateOf(0) }
+    val mainState = rememberMainPagerState(pagerState, scope)
     var practiceSession by remember { mutableStateOf<PracticeSession?>(null) }
     var addOpen by remember { mutableStateOf(false) }
     var practiceLogOpen by remember { mutableStateOf(false) }
@@ -77,10 +84,10 @@ fun MainScreen() {
     var contentReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { contentReady = true }
 
-    // 滑动/点击切换时实时同步当前 tab（驱动底栏选中态）
+    // 用户手动滑动页面时回写选中态（导航动画期间不打断）
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }
-            .collect { page -> currentTabIndex = page }
+            .collect { page -> mainState.syncPage() }
     }
 
     // 采集整页内容作为玻璃底栏的模糊背景层（底栏 overlay 与采集层互为兄弟）
@@ -89,7 +96,6 @@ fun MainScreen() {
         drawRect(surfaceColor)
         drawContent()
     }
-    val navItems = remember { MainTab.entries.map { NavigationItem(label = it.label, icon = it.icon) } }
 
     CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -114,7 +120,7 @@ fun MainScreen() {
                         when (MainTab.entries[page]) {
                             MainTab.Home -> HomeScreen(
                                 onStartPractice = { practiceSession = it },
-                                onGoLibrary = { scope.launch { pagerState.springAnimateToPage(MainTab.Library.ordinal) } },
+                                onGoLibrary = { mainState.animateToPage(MainTab.Library.ordinal) },
                                 onOpenPracticeLog = { practiceLogOpen = true },
                                 categoryMenuExpanded = categoryMenuExpanded,
                                 onCategoryMenuExpandedChange = { categoryMenuExpanded = it },
@@ -128,17 +134,45 @@ fun MainScreen() {
                     }
                 }
             }
-            // 悬浮底栏 overlay（参考 KernelSU FloatingBottomBar）：不占内容区域，内容可延伸到底栏后方
-            GlassNavigationBar(
+            // 液态玻璃悬浮底栏 overlay（KernelSU FloatingBottomBar 移植）：
+            // 不占内容区域，内容可延伸到底栏后方
+            Box(
                 modifier = Modifier.fillMaxSize(),
-                selected = currentTabIndex,
-                onSelect = { index ->
-                    // 快速连点会中断当前动画、直接滑向新目标；
-                    // 弹簧动画（KernelSU 同款）起步跟手、收尾轻弹
-                    scope.launch { pagerState.springAnimateToPage(index) }
-                },
-                items = navItems,
-            )
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                FloatingBottomBar(
+                    modifier = Modifier.padding(
+                        bottom = 12.dp + WindowInsets.navigationBars
+                            .only(WindowInsetsSides.Bottom)
+                            .asPaddingValues()
+                            .calculateBottomPadding(),
+                    ),
+                    selectedIndex = { mainState.selectedPage },
+                    onSelected = { mainState.animateToPage(it) },
+                    backdrop = backdrop,
+                    tabsCount = MainTab.entries.size,
+                    // 不支持 AGSL 运行时着色器时降级为普通半透明胶囊
+                    isBlurEnabled = isRuntimeShaderSupported(),
+                ) {
+                    MainTab.entries.forEach { tab ->
+                        FloatingBottomBarItem(
+                            onClick = { mainState.animateToPage(tab.ordinal) },
+                            modifier = Modifier.defaultMinSize(minWidth = 76.dp),
+                        ) {
+                            Icon(
+                                imageVector = tab.icon,
+                                contentDescription = null,
+                            )
+                            Text(
+                                text = tab.label,
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
             // 全屏 overlay：闪卡练题
             practiceSession?.let { session ->
                 PracticeSessionScreen(
@@ -171,75 +205,14 @@ fun MainScreen() {
     }
     // 返回键优先级：先关分类面板，再关 overlay，再回主页 Tab，最后才退出应用
     BackHandler(
-        enabled = categoryMenuExpanded || practiceSession != null || addOpen || practiceLogOpen || currentTabIndex != 0,
+        enabled = categoryMenuExpanded || practiceSession != null || addOpen || practiceLogOpen || mainState.selectedPage != 0,
     ) {
         when {
             categoryMenuExpanded -> categoryMenuExpanded = false
             practiceLogOpen -> practiceLogOpen = false
             practiceSession != null -> practiceSession = null
             addOpen -> addOpen = false
-            currentTabIndex != 0 -> scope.launch { pagerState.springAnimateToPage(0) }
+            mainState.selectedPage != 0 -> mainState.animateToPage(0)
         }
-    }
-}
-
-/**
- * 底部导航切换弹簧（参考 KernelSU 的 PagerNavigationSpringSpec）：
- * stiffness 322.2 介于 StiffnessLow(150) 与 Medium(400) 之间，
- * dampingRatio ≈ 0.9 轻微欠阻尼，起步跟手、收尾带一丝弹性的"丝滑"手感。
- */
-private val PagerNavigationSpringSpec: SpringSpec<Float> = spring(
-    stiffness = 322.2f,
-    dampingRatio = 32.31f / (2f * kotlin.math.sqrt(322.2f)),
-    visibilityThreshold = 0.5f,
-)
-
-/**
- * 弹簧动画滚动到指定页（参考 KernelSU 的 springAnimateToPage）：
- * 用 Animatable 逐帧计算位移并 scrollBy 驱动，速度曲线完全由弹簧决定，
- * 比 animateScrollToPage 的默认动画更顺滑；跨多页时连续滑过中间页面。
- */
-private suspend fun PagerState.springAnimateToPage(target: Int) {
-    if (target !in 0 until pageCount) return
-    var shouldSnapToTarget = false
-    scroll(MutatePriority.UserInput) {
-        val pageSize = layoutInfo.pageSize + layoutInfo.pageSpacing
-        val distance = target - currentPage - currentPageOffsetFraction
-        val scrollPixels = distance * pageSize
-        if (abs(scrollPixels) <= 0.5f) return@scroll
-
-        var consumedScroll = 0f
-        var skipScroll = false
-        Animatable(0f).animateTo(
-            targetValue = scrollPixels,
-            animationSpec = PagerNavigationSpringSpec,
-        ) {
-            if (skipScroll) return@animateTo
-
-            val delta = value - consumedScroll
-            if (abs(delta) > 0.5f) {
-                val consumed = scrollBy(delta)
-                consumedScroll += consumed
-                if (abs(delta - consumed) > 0.1f) {
-                    shouldSnapToTarget = true
-                    skipScroll = true
-                }
-            } else {
-                consumedScroll = value
-            }
-
-            if (abs(velocity) < 0.1f && abs(scrollPixels - consumedScroll) < 1.0f) {
-                skipScroll = true
-            }
-        }
-
-        val remaining = scrollPixels - consumedScroll
-        if (abs(remaining) > 0.5f) {
-            scrollBy(remaining)
-        }
-    }
-
-    if (shouldSnapToTarget || currentPage != target) {
-        scrollToPage(target)
     }
 }
