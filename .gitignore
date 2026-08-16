@@ -10,6 +10,8 @@ build/
 local.properties
 *.apk
 *.aab
+# 本地维护文档，不入库
+PROJECT_STATUS.md
 # 临时排错产物（miuix 源码导出 / kotlin_module 构建产物），不入库
 /top/
 /META-INF/
