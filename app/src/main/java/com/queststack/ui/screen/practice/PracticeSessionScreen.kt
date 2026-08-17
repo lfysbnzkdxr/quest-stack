@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.queststack.data.db.Question
+import com.queststack.ui.component.AnswerText
 import com.queststack.ui.component.CategoryFilterBar
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -181,11 +182,11 @@ private fun FlashCard(
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
+                        AnswerText(
                             text = question.answer.ifBlank { "（答案为空）" },
                             fontSize = 15.sp,
+                            lineHeight = 24.sp,
                             color = MiuixTheme.colorScheme.onSurfaceContainer,
-                            lineHeight = 22.sp,
                         )
                     }
                 }
