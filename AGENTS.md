@@ -1,11 +1,11 @@
 # AGENTS.md
 
-QuestStack（题栈）—— Android 面试题练习应用。Kotlin + Jetpack Compose + Miuix（MIUI 风格 UI），单 `:app` 模块，包名 `com.queststack`。minSdk 33 / target+compile 37。无 README、无测试、无 CI。
+QuestStack（题栈）—— Android 面试题练习应用。Kotlin + Jetpack Compose + Miuix（MIUI 风格 UI），单 `:app` 模块，包名 `com.queststack`。minSdk 33 / target+compile 37。无 README。CI 见 `.github/workflows/ci.yml`（单测 + 编译，push 到 main 或 PR 时触发）。
 
 ## 构建与验证
 
 - Windows 下用 `.\gradlew.bat`（Gradle 9.6.1 wrapper），如 `.\gradlew.bat :app:assembleDebug`。
-- 仓库没有测试源码（`app/src/test`、`app/src/androidTest` 均不存在）——不要运行 test 任务验证改动，用 `assembleDebug` / `:app:compileDebugKotlin`。
+- 验证改动：跑 `.\gradlew.bat :app:testDebugUnitTest`（`app/src/test` 下的 JVM 单测）+ `:app:assembleDebug` 编译；UI 效果靠真机冒烟（本仓库不做 Compose UI 测试，Miuix 毛玻璃曾有真机崩溃风险）。
 - `local.properties`（sdk.dir）被 gitignore，机器相关，不要提交。
 - 注意 AGP 9.3.0 内置 Kotlin，**不要添加 `org.jetbrains.kotlin.android` 插件**；根 `build.gradle.kts` 中 `buildscript` 显式 pin 的 `kotlin-gradle-plugin:2.4.10` classpath 是必须的，别删。
 
