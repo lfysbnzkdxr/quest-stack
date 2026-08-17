@@ -4,10 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.queststack.data.DataContainer
 import com.queststack.data.db.Category
-import com.queststack.data.db.PracticeLogEntity
 import com.queststack.data.db.Question
 import com.queststack.data.repository.CategoryRepository
-import com.queststack.data.repository.PracticeLogRepository
 import com.queststack.data.repository.QuestionRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,7 +43,6 @@ class PracticeSessionViewModel(
     private val session: PracticeSession,
     private val questionRepository: QuestionRepository = DataContainer.questionRepository,
     private val categoryRepository: CategoryRepository = DataContainer.categoryRepository,
-    private val practiceLogRepository: PracticeLogRepository = DataContainer.practiceLogRepository,
 ) : ViewModel() {
 
     private val _selectedCategoryId = MutableStateFlow(session.categoryId)
@@ -112,22 +109,8 @@ class PracticeSessionViewModel(
         _uiState.update { it.copy(revealed = true) }
     }
 
-    /** 下一题：把刚看完答案的这题写入练题记录，再随机重抽并收起答案 */
+    /** 下一题：随机重抽并收起答案 */
     fun next() {
-        _uiState.value.current?.let { current ->
-            val categoryName =
-                _uiState.value.categories.firstOrNull { it.id == current.categoryId }?.name
-            viewModelScope.launch {
-                practiceLogRepository.insert(
-                    PracticeLogEntity(
-                        questionTitle = current.title,
-                        categoryName = categoryName,
-                        difficulty = current.difficulty,
-                        practicedAt = System.currentTimeMillis(),
-                    )
-                )
-            }
-        }
         _nextTick.value++
     }
 }

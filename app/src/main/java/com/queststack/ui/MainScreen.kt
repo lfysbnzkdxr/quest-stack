@@ -37,7 +37,6 @@ import com.queststack.ui.screen.home.HomeScreen
 import com.queststack.ui.screen.library.LibraryScreen
 import com.queststack.ui.screen.practice.PracticeSession
 import com.queststack.ui.screen.practice.PracticeSessionScreen
-import com.queststack.ui.screen.practiceLog.PracticeLogScreen
 import com.queststack.ui.screen.settings.SettingsScreen
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Icon
@@ -73,7 +72,6 @@ fun MainScreen() {
     val mainState = rememberMainPagerState(pagerState, scope)
     var practiceSession by remember { mutableStateOf<PracticeSession?>(null) }
     var addOpen by remember { mutableStateOf(false) }
-    var practiceLogOpen by remember { mutableStateOf(false) }
     // 首帧完成后再开启预加载，避免启动时同时创建三页（参考 KernelSU rememberContentReady）
     var contentReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { contentReady = true }
@@ -115,7 +113,6 @@ fun MainScreen() {
                             MainTab.Home -> HomeScreen(
                                 onStartPractice = { practiceSession = it },
                                 onGoLibrary = { mainState.animateToPage(MainTab.Library.ordinal) },
-                                onOpenPracticeLog = { practiceLogOpen = true },
                             )
                             MainTab.Library -> LibraryScreen(
                                 onStartPractice = { practiceSession = it },
@@ -176,18 +173,13 @@ fun MainScreen() {
             if (addOpen) {
                 AddScreen(onBack = { addOpen = false })
             }
-            // 全屏 overlay：练题记录
-            if (practiceLogOpen) {
-                PracticeLogScreen(onBack = { practiceLogOpen = false })
-            }
         }
     }
     // 返回键优先级：先关 overlay，再回主页 Tab，最后才退出应用
     BackHandler(
-        enabled = practiceSession != null || addOpen || practiceLogOpen || mainState.selectedPage != 0,
+        enabled = practiceSession != null || addOpen || mainState.selectedPage != 0,
     ) {
         when {
-            practiceLogOpen -> practiceLogOpen = false
             practiceSession != null -> practiceSession = null
             addOpen -> addOpen = false
             mainState.selectedPage != 0 -> mainState.animateToPage(0)

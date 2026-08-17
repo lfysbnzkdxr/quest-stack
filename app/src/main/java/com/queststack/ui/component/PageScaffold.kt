@@ -22,7 +22,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * - 顶栏接 [MiuixScrollBehavior]，内容滚动时标题收缩（MIUI 风格）；
  * - 内容始终从顶栏下方开始，不受顶栏收缩影响（顶栏收缩时内容随之移动）。
  *
- * 根布局铺 surface 底色：作为全屏 overlay（如练题记录页）使用时不会透出下层页面。
+ * 根布局铺 surface 底色：作为全屏 overlay（如添加题页）使用时不会透出下层页面。
  *
  * @param title 顶栏标题。
  * @param content 页面内容，参数为滚动行为（挂到滚动容器的 nestedScroll 上即可联动顶栏）。
