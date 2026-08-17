@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
@@ -29,16 +27,14 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/** 主页（仪表盘）：随机练题、练题记录两大块 */
+/** 主页（仪表盘）：随机练题 */
 @Composable
 fun HomeScreen(
     onStartPractice: (PracticeSession) -> Unit,
     onGoLibrary: () -> Unit,
-    onOpenPracticeLog: () -> Unit,
     viewModel: HomeViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -56,14 +52,6 @@ fun HomeScreen(
                     totalCount = uiState.totalCount,
                     onStart = { onStartPractice(PracticeSession()) },
                     onGoLibrary = onGoLibrary,
-                )
-            }
-            item { SectionTitle("练题记录") }
-            item {
-                PracticeLogBanner(
-                    todayCount = uiState.todayPracticeCount,
-                    totalCount = uiState.totalPracticeCount,
-                    onClick = onOpenPracticeLog,
                 )
             }
         }
@@ -112,61 +100,6 @@ private fun RandomPracticeCard(
                 else "题库暂无题目，去添加第一道题",
                 fontSize = 13.sp,
                 color = onPrimary.copy(alpha = 0.8f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        fontSize = 13.sp,
-        color = MiuixTheme.colorScheme.onBackgroundVariant,
-        modifier = Modifier.padding(top = 8.dp, start = 4.dp, bottom = 2.dp),
-    )
-}
-
-/** 练题记录入口卡：今日/累计练题数，点击进入练题记录页 */
-@Composable
-private fun PracticeLogBanner(
-    todayCount: Int,
-    totalCount: Int,
-    onClick: () -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        cornerRadius = 16.dp,
-        insideMargin = PaddingValues(0.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MiuixTheme.colorScheme.surfaceContainer)
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "练题记录",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onBackground,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "今日 $todayCount 题 · 累计 $totalCount 题",
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                )
-            }
-            Icon(
-                imageVector = MiuixIcons.ChevronForward,
-                contentDescription = null,
-                tint = MiuixTheme.colorScheme.onBackgroundVariant,
-                modifier = Modifier.size(18.dp),
             )
         }
     }
