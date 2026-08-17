@@ -1,8 +1,6 @@
 package com.queststack.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -27,7 +25,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,8 +64,7 @@ enum class MainTab(val icon: ImageVector, val label: String) {
  * - 无全局顶栏：HorizontalPager 全屏承载三个 Tab，每个 Tab 页自带顶栏随页面横滑；
  * - 底栏为液态玻璃悬浮导航（KernelSU FloatingBottomBar 移植）：采样全局 backdrop，
  *   overlay 在内容之上，可拖动指示器（松手才切页）、按压放大、重力感应高光；
- * - 闪卡练题 / 添加页为全屏 overlay，盖在 pager 之上；
- * - 分类练习弹窗的变暗遮罩在同一窗口绘制，避免独立 Popup 窗口导致状态栏闪烁/恢复。
+ * - 闪卡练题 / 添加页为全屏 overlay，盖在 pager 之上。
  */
 @Composable
 fun MainScreen() {
@@ -78,8 +74,6 @@ fun MainScreen() {
     var practiceSession by remember { mutableStateOf<PracticeSession?>(null) }
     var addOpen by remember { mutableStateOf(false) }
     var practiceLogOpen by remember { mutableStateOf(false) }
-    // 分类面板展开状态提升到 MainScreen，遮罩与 Activity 同窗口，点击遮罩/返回键关闭
-    var categoryMenuExpanded by remember { mutableStateOf(false) }
     // 首帧完成后再开启预加载，避免启动时同时创建三页（参考 KernelSU rememberContentReady）
     var contentReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { contentReady = true }
@@ -122,8 +116,6 @@ fun MainScreen() {
                                 onStartPractice = { practiceSession = it },
                                 onGoLibrary = { mainState.animateToPage(MainTab.Library.ordinal) },
                                 onOpenPracticeLog = { practiceLogOpen = true },
-                                categoryMenuExpanded = categoryMenuExpanded,
-                                onCategoryMenuExpandedChange = { categoryMenuExpanded = it },
                             )
                             MainTab.Library -> LibraryScreen(
                                 onStartPractice = { practiceSession = it },
@@ -188,27 +180,13 @@ fun MainScreen() {
             if (practiceLogOpen) {
                 PracticeLogScreen(onBack = { practiceLogOpen = false })
             }
-            // 分类面板遮罩：与 Activity 同窗口，盖住顶栏/内容/底栏，点击关闭
-            if (categoryMenuExpanded) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.3f))
-                        .clickable(
-                            interactionSource = null,
-                            indication = null,
-                            onClick = { categoryMenuExpanded = false },
-                        ),
-                )
-            }
         }
     }
-    // 返回键优先级：先关分类面板，再关 overlay，再回主页 Tab，最后才退出应用
+    // 返回键优先级：先关 overlay，再回主页 Tab，最后才退出应用
     BackHandler(
-        enabled = categoryMenuExpanded || practiceSession != null || addOpen || practiceLogOpen || mainState.selectedPage != 0,
+        enabled = practiceSession != null || addOpen || practiceLogOpen || mainState.selectedPage != 0,
     ) {
         when {
-            categoryMenuExpanded -> categoryMenuExpanded = false
             practiceLogOpen -> practiceLogOpen = false
             practiceSession != null -> practiceSession = null
             addOpen -> addOpen = false
