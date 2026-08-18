@@ -252,4 +252,20 @@ class AddViewModel(
     fun consumeSaved() {
         _uiState.update { it.copy(saved = false) }
     }
+
+    /** 每次进入添加页时重置表单：ViewModel 挂在 Activity 级 ViewModelStore，离开再进入会复用实例并残留上次草稿 */
+    fun reset() {
+        _uiState.update {
+            it.copy(
+                selectedCategoryId = null,
+                difficulty = 1,
+                title = "",
+                answer = "",
+                saving = false,
+                aiBusy = false,
+                message = null,
+                saved = false,
+            )
+        }
+    }
 }

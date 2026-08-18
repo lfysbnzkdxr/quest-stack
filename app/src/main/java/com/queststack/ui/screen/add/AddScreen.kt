@@ -73,6 +73,10 @@ fun AddScreen(
     val aiConfig = uiState.aiConfig
     val aiConfigured = aiConfig != null && aiConfig.baseUrl.isNotBlank() && aiConfig.model.isNotBlank()
 
+    // 每次进入页面重置表单：ViewModel 挂在 Activity 级 ViewModelStore，离开再进入会复用实例并残留上次草稿
+    LaunchedEffect(Unit) {
+        viewModel.reset()
+    }
     // 输入由 TextFieldState 管理（本地展示），值同步到 ViewModel 的 String 状态
     val titleState = remember { TextFieldState() }
     val answerState = remember { TextFieldState() }
