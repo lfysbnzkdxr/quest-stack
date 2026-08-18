@@ -17,7 +17,9 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -65,6 +67,9 @@ object DataContainer {
                 .readTimeout(60, TimeUnit.SECONDS)
                 .build()
         )
+        // 启动时同步加载主题模式，避免首帧以默认主题渲染后再切换（深色用户闪白）；
+        // 后续变更仍由下方 collect 持续同步
+        AppSettings.themeMode = runBlocking { settingsRepository.themeMode.first() }
         scope.launch {
             settingsRepository.themeMode.collect { AppSettings.themeMode = it }
         }
