@@ -6,6 +6,7 @@ import com.queststack.data.db.Question
 import com.queststack.data.repository.CategoryRepository
 import com.queststack.data.repository.QuestionRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -20,6 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class PracticeSessionViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
@@ -168,6 +170,33 @@ class PracticeSessionViewModelTest {
         advanceUntilIdle()
         assertEquals(Category.UNCATEGORIZED_ID, vm.uiState.value.selectedCategoryId)
         assertEquals(q(2), vm.uiState.value.current)
+    }
+
+    @Test
+    fun `start 重置会话：复用 VM 后按新 session 抽题并收起答案`() = runTest(dispatcher.scheduler) {
+        val vm = PracticeSessionViewModel(
+            session = PracticeSession(),
+            questionRepository = FakeQuestionRepository(
+                idsByFilter = mapOf(
+                    null to null to listOf(1L, 2L),
+                    5L to null to listOf(2L, 3L),
+                ),
+                questions = mapOf(1L to q(1), 2L to q(2), 3L to q(3)),
+            ),
+            categoryRepository = FakeCategoryRepository(),
+        )
+        advanceUntilIdle()
+        assertEquals(q(1), vm.uiState.value.current)
+
+        vm.revealAnswer()
+        assertEquals(true, vm.uiState.value.revealed)
+
+        // 模拟同 key 复用：重新开始一个带 startQuestionId 的新会话
+        vm.start(PracticeSession(categoryId = 5L, startQuestionId = 3L))
+        advanceUntilIdle()
+        assertEquals(5L, vm.uiState.value.selectedCategoryId)
+        assertEquals(q(3), vm.uiState.value.current)
+        assertEquals(false, vm.uiState.value.revealed)
     }
 
     private fun q(id: Long) = Question(

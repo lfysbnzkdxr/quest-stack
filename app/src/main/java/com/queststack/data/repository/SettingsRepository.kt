@@ -1,6 +1,7 @@
 package com.queststack.data.repository
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -81,6 +82,15 @@ class SettingsRepository(context: Context) {
         }
     }
 
+    /** 预设种子题是否已注入过（防止用户删光题库后重启被重新注入） */
+    val seeded: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_SEEDED] ?: false
+    }
+
+    suspend fun markSeeded() {
+        dataStore.edit { prefs -> prefs[KEY_SEEDED] = true }
+    }
+
     private companion object {
         val KEY_BASE_URL = stringPreferencesKey("base_url")
         val KEY_API_KEY = stringPreferencesKey("api_key")
@@ -90,5 +100,6 @@ class SettingsRepository(context: Context) {
         val KEY_WEBDAV_URL = stringPreferencesKey("webdav_url")
         val KEY_WEBDAV_USERNAME = stringPreferencesKey("webdav_username")
         val KEY_WEBDAV_PASSWORD = stringPreferencesKey("webdav_password")
+        val KEY_SEEDED = booleanPreferencesKey("seeded")
     }
 }

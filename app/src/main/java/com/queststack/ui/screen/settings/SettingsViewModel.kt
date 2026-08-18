@@ -180,7 +180,9 @@ class SettingsViewModel(
                     it.copy(busy = false, busyAction = null, message = "导入成功，新增 $count 题")
                 }
             } catch (e: IllegalArgumentException) {
-                _uiState.update { it.copy(busy = false, busyAction = null, message = "备份文件格式不正确") }
+                _uiState.update {
+                    it.copy(busy = false, busyAction = null, message = backupErrorMessage(e))
+                }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(busy = false, busyAction = null, message = "导入失败：${e.message ?: "未知错误"}")
@@ -248,7 +250,7 @@ class SettingsViewModel(
                 else "WebDAV 操作失败：${e.message ?: "未知错误"}"
                 _uiState.update { it.copy(busy = false, busyAction = null, message = message) }
             } catch (e: IllegalArgumentException) {
-                _uiState.update { it.copy(busy = false, busyAction = null, message = "备份文件格式不正确") }
+                _uiState.update { it.copy(busy = false, busyAction = null, message = backupErrorMessage(e)) }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(busy = false, busyAction = null, message = "WebDAV 操作失败：${e.message ?: "未知错误"}")
@@ -256,6 +258,12 @@ class SettingsViewModel(
             }
         }
     }
+
+    /**
+     * 备份导入异常文案：版本过高提示升级应用，其余统一"格式不正确"。
+     */
+    private fun backupErrorMessage(e: IllegalArgumentException): String =
+        if (e.message?.contains("版本过高") == true) e.message.orEmpty() else "备份文件格式不正确"
 
     /** UI 弹出 Toast 后消费掉 message，避免重复提示 */
     fun consumeMessage() {
