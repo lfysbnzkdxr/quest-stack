@@ -20,7 +20,11 @@ interface QuestionDao {
     @Query("SELECT * FROM questions ORDER BY updatedAt DESC")
     fun observeAll(): Flow<List<Question>>
 
-    @Query("SELECT * FROM questions WHERE (:categoryId IS NULL OR categoryId = :categoryId) AND (:difficulty IS NULL OR difficulty = :difficulty) ORDER BY updatedAt DESC")
+    /**
+     * 按筛选查询：categoryId 为 null = 全部；为 -1（[Category.UNCATEGORIZED_ID]）= 仅未分类；
+     * 其他值 = 指定分类。difficulty 为 null = 不限难度。
+     */
+    @Query("SELECT * FROM questions WHERE (:categoryId IS NULL OR categoryId = :categoryId OR (:categoryId = -1 AND categoryId IS NULL)) AND (:difficulty IS NULL OR difficulty = :difficulty) ORDER BY updatedAt DESC")
     fun observeFiltered(categoryId: Long?, difficulty: Int?): Flow<List<Question>>
 
     @Query("SELECT * FROM questions WHERE id = :id")
@@ -29,7 +33,8 @@ interface QuestionDao {
     @Query("DELETE FROM questions WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    @Query("SELECT id FROM questions WHERE (:categoryId IS NULL OR categoryId = :categoryId) AND (:difficulty IS NULL OR difficulty = :difficulty)")
+    /** 获取筛选范围内题目的 id（练题随机用），语义同 [observeFiltered] */
+    @Query("SELECT id FROM questions WHERE (:categoryId IS NULL OR categoryId = :categoryId OR (:categoryId = -1 AND categoryId IS NULL)) AND (:difficulty IS NULL OR difficulty = :difficulty)")
     suspend fun getIds(categoryId: Long?, difficulty: Int?): List<Long>
 
     @Query("SELECT categoryId, COUNT(*) AS count FROM questions GROUP BY categoryId")
