@@ -63,9 +63,11 @@ fun CategoryFilterBar(
     var difficultyButtonWidth by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     // 值前带"分类/难度"前缀，避免"全部/全部"语义不清
-    val currentCategoryName =
-        if (selectedCategoryId == null) "分类：全部"
-        else "分类：${categories.firstOrNull { it.id == selectedCategoryId }?.name ?: "全部"}"
+    val currentCategoryName = when (selectedCategoryId) {
+        null -> "分类：全部"
+        Category.UNCATEGORIZED_ID -> "分类：未分类"
+        else -> "分类：${categories.firstOrNull { it.id == selectedCategoryId }?.name ?: "全部"}"
+    }
     val currentDifficultyName = "难度：${difficultyLabel(difficulty)}"
 
     Row(
@@ -254,6 +256,7 @@ private fun CategoryDropdownPanel(
                     onClick = { onSelect(category.id) },
                 )
             }
+            DropdownRow("未分类", isSelected = selectedCategoryId == Category.UNCATEGORIZED_ID, onClick = { onSelect(Category.UNCATEGORIZED_ID) })
         }
     }
 }

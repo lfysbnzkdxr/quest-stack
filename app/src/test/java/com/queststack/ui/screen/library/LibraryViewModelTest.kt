@@ -70,6 +70,28 @@ class LibraryViewModelTest {
     }
 
     @Test
+    fun `selectCategory 未分类哨兵筛选未分类题目并同步显示状态`() = runTest(dispatcher.scheduler) {
+        val vm = LibraryViewModel(
+            FakeQuestionRepository(
+                questions = mapOf(
+                    null to null to listOf(q(1, null, 1)),
+                    Category.UNCATEGORIZED_ID to null to listOf(q(2, null, 1)),
+                ),
+            ),
+            FakeCategoryRepository(categories),
+        )
+        advanceUntilIdle()
+        assertEquals(listOf(q(1, null, 1)), vm.uiState.value.questions)
+
+        vm.selectCategory(Category.UNCATEGORIZED_ID)
+        advanceUntilIdle()
+        // 双份状态同步：显示状态跟随
+        assertEquals(Category.UNCATEGORIZED_ID, vm.uiState.value.selectedCategoryId)
+        // 驱动源变化触发重查未分类范围
+        assertEquals(listOf(q(2, null, 1)), vm.uiState.value.questions)
+    }
+
+    @Test
     fun `selectDifficulty 同时更新驱动源与显示状态并触发重查`() = runTest(dispatcher.scheduler) {
         val vm = LibraryViewModel(
             FakeQuestionRepository(

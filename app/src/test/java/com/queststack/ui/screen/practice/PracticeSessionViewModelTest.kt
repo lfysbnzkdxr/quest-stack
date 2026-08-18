@@ -148,6 +148,28 @@ class PracticeSessionViewModelTest {
         assertEquals(q(2), vm.uiState.value.current)
     }
 
+    @Test
+    fun `筛选未分类哨兵触发从未分类范围重抽并同步显示状态`() = runTest(dispatcher.scheduler) {
+        val vm = PracticeSessionViewModel(
+            session = PracticeSession(),
+            questionRepository = FakeQuestionRepository(
+                idsByFilter = mapOf(
+                    null to null to listOf(1L),
+                    Category.UNCATEGORIZED_ID to null to listOf(2L),
+                ),
+                questions = mapOf(1L to q(1), 2L to q(2)),
+            ),
+            categoryRepository = FakeCategoryRepository(),
+        )
+        advanceUntilIdle()
+        assertEquals(q(1), vm.uiState.value.current)
+
+        vm.selectCategory(Category.UNCATEGORIZED_ID)
+        advanceUntilIdle()
+        assertEquals(Category.UNCATEGORIZED_ID, vm.uiState.value.selectedCategoryId)
+        assertEquals(q(2), vm.uiState.value.current)
+    }
+
     private fun q(id: Long) = Question(
         id = id,
         title = "题$id",

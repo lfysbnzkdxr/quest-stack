@@ -2,6 +2,7 @@ package com.queststack.data
 
 import android.content.Context
 import android.util.Log
+import androidx.room.withTransaction
 import com.queststack.ai.AiClient
 import com.queststack.data.backup.BackupRepository
 import com.queststack.data.backup.WebDavClient
@@ -53,7 +54,11 @@ object DataContainer {
         categoryRepository = CategoryRepositoryImpl(database.categoryDao())
         settingsRepository = SettingsRepository(context)
         aiClient = AiClient(okHttpClient)
-        backupRepository = BackupRepository(database.questionDao(), database.categoryDao())
+        backupRepository = BackupRepository(
+            questionDao = database.questionDao(),
+            categoryDao = database.categoryDao(),
+            transactionRunner = { database.withTransaction(it) },
+        )
         webDavClient = WebDavClient(
             OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)

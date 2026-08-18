@@ -30,6 +30,8 @@ data class AddUiState(
     val message: String? = null,
     val aiBusy: Boolean = false,
     val aiConfig: AiConfig? = null,
+    /** 保存成功事件：UI 收到 true 后自动返回并调用 [AddViewModel.consumeSaved] 复位 */
+    val saved: Boolean = false,
 )
 
 class AddViewModel(
@@ -232,6 +234,7 @@ class AddViewModel(
                         title = "",
                         answer = "",
                         message = "已添加",
+                        saved = true,
                     )
                 }
             } catch (e: Exception) {
@@ -243,5 +246,10 @@ class AddViewModel(
     /** UI 弹出 Toast 后消费掉 message，避免重复提示 */
     fun consumeMessage() {
         _uiState.update { it.copy(message = null) }
+    }
+
+    /** UI 处理完保存成功事件后复位，避免重复触发返回 */
+    fun consumeSaved() {
+        _uiState.update { it.copy(saved = false) }
     }
 }

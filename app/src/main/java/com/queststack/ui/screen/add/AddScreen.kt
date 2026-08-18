@@ -98,16 +98,17 @@ fun AddScreen(
             answerState.edit { replace(0, length, uiState.answer) }
         }
     }
-    // 保存结果提示：成功后自动返回题库
+    // 保存结果提示：message 仅用于 Toast，返回导航由独立事件 saved 驱动
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-            if (it == "已添加") {
-                viewModel.consumeMessage()
-                onBack()
-            } else {
-                viewModel.consumeMessage()
-            }
+            viewModel.consumeMessage()
+        }
+    }
+    LaunchedEffect(uiState.saved) {
+        if (uiState.saved) {
+            viewModel.consumeSaved()
+            onBack()
         }
     }
 
