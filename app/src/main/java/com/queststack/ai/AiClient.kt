@@ -40,7 +40,7 @@ class AiClient(private val okHttpClient: OkHttpClient) {
             ?.jsonArray
             ?.firstOrNull()
             ?.jsonObject?.get("message")?.jsonObject?.get("content")?.jsonPrimitive?.contentOrNull
-        return content ?: throw IllegalStateException("AI 响应中缺少 choices[0].message.content")
+        return content ?: throw IllegalArgumentException("AI 响应中缺少 choices[0].message.content")
     }
 
     /** 生成参考答案：返回回答文本 */
