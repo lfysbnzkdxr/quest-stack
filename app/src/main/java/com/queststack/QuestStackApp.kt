@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class QuestStackApp : Application() {
@@ -23,11 +24,17 @@ class QuestStackApp : Application() {
         super.onCreate()
         DataContainer.init(this)
         appScope.launch {
-            DataContainer.database.withTransaction {
-                Seed.seedCategories(
-                    DataContainer.database.categoryDao(),
-                    DataContainer.database.questionDao(),
-                )
+            // seeded 标记防止用户删光题库后重启被重新注入；
+            // Seed 内部另有"分类表为空"检查，避免升级用户（无标记但有数据）被重复注入
+            val alreadySeeded = DataContainer.settingsRepository.seeded.first()
+            if (!alreadySeeded) {
+                DataContainer.database.withTransaction {
+                    Seed.seedCategories(
+                        DataContainer.database.categoryDao(),
+                        DataContainer.database.questionDao(),
+                    )
+                }
+                DataContainer.settingsRepository.markSeeded()
             }
         }
     }
