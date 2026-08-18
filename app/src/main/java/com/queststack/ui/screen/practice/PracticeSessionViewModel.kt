@@ -40,7 +40,7 @@ data class PracticeSessionUiState(
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PracticeSessionViewModel(
-    private val session: PracticeSession,
+    private var session: PracticeSession,
     private val questionRepository: QuestionRepository = DataContainer.questionRepository,
     private val categoryRepository: CategoryRepository = DataContainer.categoryRepository,
 ) : ViewModel() {
@@ -86,9 +86,9 @@ class PracticeSessionViewModel(
     private suspend fun loadRandom(categoryId: Long?, difficulty: Int?): Question? {
         val ids = questionRepository.randomQuestionIds(categoryId, difficulty)
         if (ids.isEmpty()) return null
+        val startId = session.startQuestionId
         val target = when {
-            firstLoad && session.startQuestionId != null && ids.contains(session.startQuestionId) ->
-                session.startQuestionId
+            firstLoad && startId != null && ids.contains(startId) -> startId
             else -> ids.firstOrNull { it != _uiState.value.current?.id } ?: ids.first()
         }
         firstLoad = false
@@ -111,6 +111,30 @@ class PracticeSessionViewModel(
 
     /** 下一题：随机重抽并收起答案 */
     fun next() {
+        _nextTick.value++
+    }
+
+    /**
+     * 重新开始一次会话（进入练题页时由 UI 调用）：
+     * ViewModel 挂在 Activity 的 ViewModelStore，同 key 会话会复用同一个实例，
+     * 必须在此重置会话参数与显示状态，否则旧题/答案展开状态残留、startQuestionId 失效。
+     */
+    fun start(session: PracticeSession) {
+        this.session = session
+        firstLoad = true
+        _selectedCategoryId.value = session.categoryId
+        _difficulty.value = session.difficulty
+        _uiState.update {
+            it.copy(
+                selectedCategoryId = session.categoryId,
+                difficulty = session.difficulty,
+                current = null,
+                revealed = false,
+                loading = true,
+                empty = false,
+            )
+        }
+        // 筛选值可能未变化（同 key 复用场景），用 tick 强制触发重抽
         _nextTick.value++
     }
 }

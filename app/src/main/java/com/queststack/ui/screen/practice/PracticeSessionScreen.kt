@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +59,11 @@ fun PracticeSessionScreen(
         initializer = { PracticeSessionViewModel(session) },
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // 同 key 会复用同一个 ViewModel（挂在 Activity 的 ViewModelStore），进入时必须重置会话状态
+    LaunchedEffect(session) {
+        viewModel.start(session)
+    }
 
     Column(
         modifier = Modifier
