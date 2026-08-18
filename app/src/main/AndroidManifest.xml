@@ -5,10 +5,12 @@
 
     <application
         android:name=".QuestStackApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.QuestStack">
+        <!-- allowBackup=false：API Key、WebDAV 密码经 SecureStorage 加密后与密钥同库存储，
+             系统备份/换机恢复存在密钥失效与敏感数据外泄风险，v0.x 阶段优先安全 -->
 
         <activity
             android:name=".MainActivity"
