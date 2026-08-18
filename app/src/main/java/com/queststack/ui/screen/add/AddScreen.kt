@@ -109,11 +109,9 @@ fun AddScreen(
             viewModel.consumeMessage()
         }
     }
-    LaunchedEffect(uiState.saved) {
-        if (uiState.saved) {
-            viewModel.consumeSaved()
-            onBack()
-        }
+    // 保存成功事件：收到后返回（事件走 Channel，不残留，离开页面后再次进入不会误触发）
+    LaunchedEffect(Unit) {
+        viewModel.savedEvents.collect { onBack() }
     }
 
     Column(
