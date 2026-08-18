@@ -81,15 +81,15 @@ class PracticeSessionViewModelTest {
 
         vm.next()
         advanceUntilIdle()
-        val second = vm.uiState.value.current
-        assertTrue(second != null && second.id != 1L)
-        assertTrue(second!!.id in listOf(2L, 3L))
+        val second = checkNotNull(vm.uiState.value.current)
+        assertTrue(second.id != 1L)
+        assertTrue(second.id in listOf(2L, 3L))
 
         vm.next()
         advanceUntilIdle()
-        val third = vm.uiState.value.current
-        assertTrue(third != null && third.id != second!!.id)
-        assertTrue(third!!.id in listOf(1L, 2L, 3L))
+        val third = checkNotNull(vm.uiState.value.current)
+        assertTrue(third.id != second.id)
+        assertTrue(third.id in listOf(1L, 2L, 3L))
     }
 
     @Test
