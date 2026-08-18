@@ -13,10 +13,14 @@ import kotlinx.serialization.json.Json
  *
  * 导出为 v3 格式（原子问题，无追问链）；兼容导入 v1/v2 旧文件：
  * v1 的 rounds 首轮答案提升为主答案，其余轮次丢弃。
+ *
+ * @param transactionRunner 多表写操作的事务执行器（生产环境传 Room 的 withTransaction；
+ *                          测试传直接执行）。默认直接执行，仅测试用，生产必须显式注入事务。
  */
 class BackupRepository(
     private val questionDao: QuestionDao,
-    private val categoryDao: CategoryDao
+    private val categoryDao: CategoryDao,
+    private val transactionRunner: suspend (block: suspend () -> Unit) -> Unit = { block -> block() },
 ) {
 
     private val json = Json {
@@ -63,44 +67,48 @@ class BackupRepository(
             throw IllegalArgumentException("备份文件版本过高（v${backupFile.version}），当前应用支持 v$CURRENT_BACKUP_VERSION，请升级应用后重试")
         }
 
-        // 分类：按名匹配，不存在则新建
+        // 现有数据在事务外读取（flow 查询不在事务中收集），写入统一走事务保证原子性
         val existingCategories = categoryDao.observeAll().first()
-        val categoryIdByName = existingCategories.associate { it.name to it.id }.toMutableMap()
-        val usedSortOrders = existingCategories.map { it.sortOrder }.toHashSet()
-        for (backupCategory in backupFile.categories) {
-            if (backupCategory.name in categoryIdByName) continue // 复用现有 id
-            var sortOrder = backupCategory.sortOrder
-            while (sortOrder in usedSortOrders) sortOrder++ // 冲突 +1
-            usedSortOrders.add(sortOrder)
-            val id = categoryDao.insert(Category(name = backupCategory.name, sortOrder = sortOrder))
-            categoryIdByName[backupCategory.name] = id
-        }
-
-        // 题目：按 title 去重，同名跳过
         val existingTitles = questionDao.observeAll().first()
             .map { it.title }
             .toHashSet()
         var importedCount = 0
-        for (backupQuestion in backupFile.questions) {
-            if (backupQuestion.title in existingTitles) continue // 不重复导入
-            // v1 兼容：rounds 含"第 0 轮 = 主问题"，其 answer 迁入主答案；v2/v3 直接用 answer
-            val mainAnswer = if (backupFile.version >= 2) {
-                backupQuestion.answer
-            } else {
-                backupQuestion.rounds.sortedBy { it.orderIndex }.firstOrNull()?.answer ?: ""
+
+        // 分类：按名匹配，不存在则新建
+        transactionRunner {
+            val categoryIdByName = existingCategories.associate { it.name to it.id }.toMutableMap()
+            val usedSortOrders = existingCategories.map { it.sortOrder }.toHashSet()
+            for (backupCategory in backupFile.categories) {
+                if (backupCategory.name in categoryIdByName) continue // 复用现有 id
+                var sortOrder = backupCategory.sortOrder
+                while (sortOrder in usedSortOrders) sortOrder++ // 冲突 +1
+                usedSortOrders.add(sortOrder)
+                val id = categoryDao.insert(Category(name = backupCategory.name, sortOrder = sortOrder))
+                categoryIdByName[backupCategory.name] = id
             }
-            questionDao.insert(
-                Question(
-                    title = backupQuestion.title,
-                    answer = mainAnswer,
-                    categoryId = categoryIdByName[backupQuestion.categoryName], // 未知分类名 → null
-                    difficulty = backupQuestion.difficulty,
-                    createdAt = backupQuestion.createdAt,
-                    updatedAt = backupQuestion.updatedAt
+
+            // 题目：按 title 去重，同名跳过
+            for (backupQuestion in backupFile.questions) {
+                if (backupQuestion.title in existingTitles) continue // 不重复导入
+                // v1 兼容：rounds 含"第 0 轮 = 主问题"，其 answer 迁入主答案；v2/v3 直接用 answer
+                val mainAnswer = if (backupFile.version >= 2) {
+                    backupQuestion.answer
+                } else {
+                    backupQuestion.rounds.sortedBy { it.orderIndex }.firstOrNull()?.answer ?: ""
+                }
+                questionDao.insert(
+                    Question(
+                        title = backupQuestion.title,
+                        answer = mainAnswer,
+                        categoryId = categoryIdByName[backupQuestion.categoryName], // 未知分类名 → null
+                        difficulty = backupQuestion.difficulty,
+                        createdAt = backupQuestion.createdAt,
+                        updatedAt = backupQuestion.updatedAt
+                    )
                 )
-            )
-            existingTitles.add(backupQuestion.title)
-            importedCount++
+                existingTitles.add(backupQuestion.title)
+                importedCount++
+            }
         }
         return importedCount
     }
