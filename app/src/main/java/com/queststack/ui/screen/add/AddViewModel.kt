@@ -11,11 +11,13 @@ import com.queststack.data.repository.QuestionRepository
 import com.queststack.data.repository.SettingsRepository
 import com.queststack.util.TextStandardizer
 import java.io.IOException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -30,8 +32,6 @@ data class AddUiState(
     val message: String? = null,
     val aiBusy: Boolean = false,
     val aiConfig: AiConfig? = null,
-    /** 保存成功事件：UI 收到 true 后自动返回并调用 [AddViewModel.consumeSaved] 复位 */
-    val saved: Boolean = false,
 )
 
 class AddViewModel(
@@ -43,6 +43,10 @@ class AddViewModel(
 
     private val _uiState = MutableStateFlow(AddUiState())
     val uiState: StateFlow<AddUiState> = _uiState.asStateFlow()
+
+    /** 保存成功一次性事件：不存 state，避免离开页面后残留导致下次进入误触发返回 */
+    private val savedEventsChannel = Channel<Unit>(Channel.BUFFERED)
+    val savedEvents: Flow<Unit> = savedEventsChannel.receiveAsFlow()
 
     init {
         viewModelScope.launch {
@@ -121,28 +125,26 @@ class AddViewModel(
         }
         _uiState.update { it.copy(aiBusy = true, message = null) }
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                try {
-                    val answer = aiClient.generateAnswer(
-                        config.baseUrl, config.apiKey, config.model, current.title,
-                        timeoutSeconds = config.timeoutSeconds,
-                    )
-                    if (answer.isBlank()) {
-                        _uiState.update {
-                            it.copy(aiBusy = false, message = "AI 未返回有效内容，请重试")
-                        }
-                        return@withContext
-                    }
+            try {
+                val answer = aiClient.generateAnswer(
+                    config.baseUrl, config.apiKey, config.model, current.title,
+                    timeoutSeconds = config.timeoutSeconds,
+                )
+                if (answer.isBlank()) {
                     _uiState.update {
-                        it.copy(
-                            aiBusy = false,
-                            answer = answer,
-                            message = "AI 已生成答案（可预览后保存）",
-                        )
+                        it.copy(aiBusy = false, message = "AI 未返回有效内容，请重试")
                     }
-                } catch (e: Exception) {
-                    handleAiError(config, e)
+                    return@launch
                 }
+                _uiState.update {
+                    it.copy(
+                        aiBusy = false,
+                        answer = answer,
+                        message = "AI 已生成答案（可预览后保存）",
+                    )
+                }
+            } catch (e: Exception) {
+                handleAiError(config, e)
             }
         }
     }
@@ -158,22 +160,20 @@ class AddViewModel(
         }
         _uiState.update { it.copy(aiBusy = true, message = null) }
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                try {
-                    val optimized = aiClient.optimizeAnswer(
-                        config.baseUrl, config.apiKey, config.model, current.title, current.answer,
-                        timeoutSeconds = config.timeoutSeconds,
+            try {
+                val optimized = aiClient.optimizeAnswer(
+                    config.baseUrl, config.apiKey, config.model, current.title, current.answer,
+                    timeoutSeconds = config.timeoutSeconds,
+                )
+                _uiState.update {
+                    it.copy(
+                        aiBusy = false,
+                        answer = optimized,
+                        message = "已优化表述",
                     )
-                    _uiState.update {
-                        it.copy(
-                            aiBusy = false,
-                            answer = optimized,
-                            message = "已优化表述",
-                        )
-                    }
-                } catch (e: Exception) {
-                    handleAiError(config, e)
                 }
+            } catch (e: Exception) {
+                handleAiError(config, e)
             }
         }
     }
@@ -189,28 +189,26 @@ class AddViewModel(
         }
         _uiState.update { it.copy(aiBusy = true, message = null) }
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                try {
-                    val formatted = aiClient.formatAnswer(
-                        config.baseUrl, config.apiKey, config.model, current.title, current.answer,
-                        timeoutSeconds = config.timeoutSeconds,
-                    )
-                    if (formatted.isBlank()) {
-                        _uiState.update {
-                            it.copy(aiBusy = false, message = "AI 未返回有效内容，请重试")
-                        }
-                        return@withContext
-                    }
+            try {
+                val formatted = aiClient.formatAnswer(
+                    config.baseUrl, config.apiKey, config.model, current.title, current.answer,
+                    timeoutSeconds = config.timeoutSeconds,
+                )
+                if (formatted.isBlank()) {
                     _uiState.update {
-                        it.copy(
-                            aiBusy = false,
-                            answer = formatted,
-                            message = "已按 AI 整理格式",
-                        )
+                        it.copy(aiBusy = false, message = "AI 未返回有效内容，请重试")
                     }
-                } catch (e: Exception) {
-                    handleAiError(config, e)
+                    return@launch
                 }
+                _uiState.update {
+                    it.copy(
+                        aiBusy = false,
+                        answer = formatted,
+                        message = "已按 AI 整理格式",
+                    )
+                }
+            } catch (e: Exception) {
+                handleAiError(config, e)
             }
         }
     }
@@ -234,9 +232,9 @@ class AddViewModel(
                         title = "",
                         answer = "",
                         message = "已添加",
-                        saved = true,
                     )
                 }
+                savedEventsChannel.trySend(Unit)
             } catch (e: Exception) {
                 _uiState.update { it.copy(saving = false, message = "保存失败，请重试") }
             }
@@ -246,11 +244,6 @@ class AddViewModel(
     /** UI 弹出 Toast 后消费掉 message，避免重复提示 */
     fun consumeMessage() {
         _uiState.update { it.copy(message = null) }
-    }
-
-    /** UI 处理完保存成功事件后复位，避免重复触发返回 */
-    fun consumeSaved() {
-        _uiState.update { it.copy(saved = false) }
     }
 
     /** 每次进入添加页时重置表单：ViewModel 挂在 Activity 级 ViewModelStore，离开再进入会复用实例并残留上次草稿 */
@@ -264,7 +257,6 @@ class AddViewModel(
                 saving = false,
                 aiBusy = false,
                 message = null,
-                saved = false,
             )
         }
     }
