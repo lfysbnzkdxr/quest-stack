@@ -2,6 +2,7 @@ package com.queststack
 
 import android.app.Application
 import android.util.Log
+import androidx.room.withTransaction
 import com.queststack.data.DataContainer
 import com.queststack.data.Seed
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -22,7 +23,12 @@ class QuestStackApp : Application() {
         super.onCreate()
         DataContainer.init(this)
         appScope.launch {
-            Seed.seedCategories(DataContainer.database.categoryDao())
+            DataContainer.database.withTransaction {
+                Seed.seedCategories(
+                    DataContainer.database.categoryDao(),
+                    DataContainer.database.questionDao(),
+                )
+            }
         }
     }
 }
