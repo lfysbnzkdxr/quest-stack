@@ -30,6 +30,9 @@ private val BOLD = Regex("\\*\\*(.+?)\\*\\*")
  * - 行首 `1.`/`1)`/`1、`/`-`/`•` → 列表项（编号加粗、换行悬挂缩进）。
  *
  * 纯文本自动降级为常规段落，无标记不影响显示。
+ *
+ * 默认文字色用主题 onBackground（miuix/KernelSU 显式配色风格）：
+ * 深色模式下不依赖 LocalContentColor（未设置时默认黑色，黑字黑底不可见）。
  */
 @Composable
 fun AnswerText(
@@ -37,7 +40,7 @@ fun AnswerText(
     modifier: Modifier = Modifier,
     fontSize: TextUnit = 15.sp,
     lineHeight: TextUnit = 24.sp,
-    color: Color = Color.Unspecified,
+    color: Color = MiuixTheme.colorScheme.onBackground,
     highlightColor: Color = MiuixTheme.colorScheme.primary,
 ) {
     // 结果仅依赖文本与强调色，缓存避免每次重组重复解析

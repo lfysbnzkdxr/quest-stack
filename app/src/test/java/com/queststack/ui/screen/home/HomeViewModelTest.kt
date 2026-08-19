@@ -57,6 +57,7 @@ class HomeViewModelTest {
         override fun observeCategoryCounts(): Flow<List<CategoryCount>> = flowOf(counts)
         override fun observeQuestions(categoryId: Long?, difficulty: Int?): Flow<List<Question>> = flowOf(emptyList())
         override suspend fun getQuestion(id: Long): Question? = null
+        override fun observeQuestion(id: Long): Flow<Question?> = flowOf(null)
         override suspend fun addQuestion(title: String, answer: String, categoryId: Long?, difficulty: Int): Long = 0
         override suspend fun updateQuestion(question: Question) {}
         override suspend fun deleteQuestion(id: Long) {}

@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +34,7 @@ import com.queststack.ui.component.FloatingBottomBarItem
 import com.queststack.ui.component.LocalGlassBackdrop
 import com.queststack.ui.component.rememberMainPagerState
 import com.queststack.ui.screen.add.AddScreen
+import com.queststack.ui.screen.detail.QuestionDetailScreen
 import com.queststack.ui.screen.home.HomeScreen
 import com.queststack.ui.screen.library.LibraryScreen
 import com.queststack.ui.screen.practice.PracticeSession
@@ -72,6 +74,7 @@ fun MainScreen() {
     val mainState = rememberMainPagerState(pagerState, scope)
     var practiceSession by remember { mutableStateOf<PracticeSession?>(null) }
     var addOpen by remember { mutableStateOf(false) }
+    var detailQuestionId by remember { mutableStateOf<Long?>(null) }
     // 首帧完成后再开启预加载，避免启动时同时创建三页（参考 KernelSU rememberContentReady）
     var contentReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { contentReady = true }
@@ -115,7 +118,7 @@ fun MainScreen() {
                                 onGoLibrary = { mainState.animateToPage(MainTab.Library.ordinal) },
                             )
                             MainTab.Library -> LibraryScreen(
-                                onStartPractice = { practiceSession = it },
+                                onQuestionClick = { detailQuestionId = it },
                                 onAddClick = { addOpen = true },
                             )
                             MainTab.Settings -> SettingsScreen()
@@ -169,18 +172,30 @@ fun MainScreen() {
                     onBack = { practiceSession = null },
                 )
             }
+            // 全屏 overlay：题目详情（含页内编辑，保存后 observeById 自动刷新）
+            // key(id)：从一题直接切到另一题时强制重建，避免编辑态 remember 残留
+            detailQuestionId?.let { id ->
+                key(id) {
+                    QuestionDetailScreen(
+                        questionId = id,
+                        onBack = { detailQuestionId = null },
+                    )
+                }
+            }
             // 全屏 overlay：添加题目
             if (addOpen) {
                 AddScreen(onBack = { addOpen = false })
             }
         }
     }
-    // 返回键优先级：先关 overlay，再回主页 Tab，最后才退出应用
+    // 返回键优先级：先关 overlay（详情→添加→练题），再回主页 Tab，最后才退出应用
     BackHandler(
-        enabled = practiceSession != null || addOpen || mainState.selectedPage != 0,
+        enabled = practiceSession != null || detailQuestionId != null ||
+            addOpen || mainState.selectedPage != 0,
     ) {
         when {
             practiceSession != null -> practiceSession = null
+            detailQuestionId != null -> detailQuestionId = null
             addOpen -> addOpen = false
             mainState.selectedPage != 0 -> mainState.animateToPage(0)
         }

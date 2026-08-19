@@ -8,6 +8,7 @@ interface QuestionRepository {
     fun observeQuestions(categoryId: Long?, difficulty: Int?): Flow<List<Question>>
     fun observeCategoryCounts(): Flow<List<CategoryCount>>
     suspend fun getQuestion(id: Long): Question?
+    fun observeQuestion(id: Long): Flow<Question?>
     suspend fun addQuestion(
         title: String,
         answer: String,
