@@ -148,11 +148,12 @@ fun CategoryFilterBar(
 }
 
 /**
- * 收缩式筛选按钮：与展开面板同宽（占满各自半边）、胶囊背景 + 当前值左对齐；
+ * 收缩式筛选/选择按钮：与展开面板同宽、胶囊背景 + 当前值左对齐；
  * 箭头固定在右端：收起时单向右箭头，展开时向下箭头。
+ * 供题库筛选栏与添加/编辑题目的分类、难度选择共用，保证样式一致。
  */
 @Composable
-private fun FilterDropdownButton(
+fun FilterDropdownButton(
     label: String,
     expanded: Boolean,
     onClick: () -> Unit,
@@ -261,8 +262,9 @@ private fun CategoryDropdownPanel(
     }
 }
 
+/** 下拉面板行（选中项 primary 色 + Check 图标） */
 @Composable
-private fun DropdownRow(text: String, isSelected: Boolean, onClick: () -> Unit) {
+fun DropdownRow(text: String, isSelected: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()

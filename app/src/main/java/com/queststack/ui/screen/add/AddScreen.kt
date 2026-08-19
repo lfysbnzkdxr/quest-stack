@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -28,8 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.queststack.ui.component.AiActionButtons
 import com.queststack.ui.component.CategorySelector
-import com.queststack.ui.component.DifficultyChip
-import com.queststack.ui.component.SectionLabel
+import com.queststack.ui.component.DifficultySelector
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -117,24 +117,7 @@ fun AddScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 4.dp),
         ) {
-            // 分类选择
-            SectionLabel("分类")
-            CategorySelector(
-                categories = uiState.categories,
-                selectedCategoryId = uiState.selectedCategoryId,
-                onSelect = viewModel::selectCategory,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 难度
-            SectionLabel("难度")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DifficultyChip("简单", selected = uiState.difficulty == 1, onClick = { viewModel.selectDifficulty(1) })
-                DifficultyChip("中等", selected = uiState.difficulty == 2, onClick = { viewModel.selectDifficulty(2) })
-                DifficultyChip("困难", selected = uiState.difficulty == 3, onClick = { viewModel.selectDifficulty(3) })
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
+            // 与详情页编辑态布局一致：问题编辑栏 → 分类+难度并排 → 答案
             // 问题标题（单行）
             TextField(
                 state = titleState,
@@ -143,7 +126,26 @@ fun AddScreen(
                 useLabelAsPlaceholder = true,
                 lineLimits = TextFieldLineLimits.SingleLine,
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 分类 + 难度（并排一行，收缩式下拉与题库一致）
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CategorySelector(
+                    categories = uiState.categories,
+                    selectedCategoryId = uiState.selectedCategoryId,
+                    onSelect = viewModel::selectCategory,
+                    modifier = Modifier.weight(1f),
+                )
+                DifficultySelector(
+                    difficulty = uiState.difficulty,
+                    onSelect = viewModel::selectDifficulty,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
 
             // 答案 / 问答内容（多行）
             TextField(
