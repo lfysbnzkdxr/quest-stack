@@ -21,6 +21,9 @@ class QuestionRepositoryImpl(
     override suspend fun getQuestion(id: Long): Question? =
         questionDao.getById(id)
 
+    override fun observeQuestion(id: Long): Flow<Question?> =
+        questionDao.observeById(id)
+
     override suspend fun addQuestion(
         title: String,
         answer: String,

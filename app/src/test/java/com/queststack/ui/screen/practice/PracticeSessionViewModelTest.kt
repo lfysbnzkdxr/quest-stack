@@ -216,6 +216,7 @@ class PracticeSessionViewModelTest {
         override fun observeQuestions(categoryId: Long?, difficulty: Int?): Flow<List<Question>> = flowOf(emptyList())
         override fun observeCategoryCounts(): Flow<List<CategoryCount>> = flowOf(emptyList())
         override suspend fun getQuestion(id: Long): Question? = questions[id]
+        override fun observeQuestion(id: Long): Flow<Question?> = flowOf(questions[id])
         override suspend fun addQuestion(title: String, answer: String, categoryId: Long?, difficulty: Int): Long = 0
         override suspend fun updateQuestion(question: Question) {}
         override suspend fun deleteQuestion(id: Long) {}

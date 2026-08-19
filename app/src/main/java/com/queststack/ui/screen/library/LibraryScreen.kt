@@ -35,7 +35,6 @@ import com.queststack.data.db.Category
 import com.queststack.data.db.Question
 import com.queststack.ui.component.CategoryFilterBar
 import com.queststack.ui.component.PageScaffold
-import com.queststack.ui.screen.practice.PracticeSession
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -57,7 +56,7 @@ fun difficultyLabel(d: Int): String = when (d) {
     else -> "简单"
 }
 
-private fun difficultyColor(d: Int): Color = when (d) {
+fun difficultyColor(d: Int): Color = when (d) {
     1 -> Color(0xFF00A871)
     2 -> Color(0xFFE8890C)
     3 -> Color(0xFFE5484D)
@@ -66,7 +65,7 @@ private fun difficultyColor(d: Int): Color = when (d) {
 
 @Composable
 fun LibraryScreen(
-    onStartPractice: (PracticeSession) -> Unit,
+    onQuestionClick: (Long) -> Unit,
     onAddClick: () -> Unit,
     viewModel: LibraryViewModel = viewModel(),
 ) {
@@ -104,14 +103,8 @@ fun LibraryScreen(
                     categories = uiState.categories,
                     scrollBehavior = scrollBehavior,
                     onQuestionClick = { question ->
-                        // 以当前筛选为范围、从该题开始闪卡练题
-                        onStartPractice(
-                            PracticeSession(
-                                categoryId = uiState.selectedCategoryId,
-                                difficulty = uiState.difficulty,
-                                startQuestionId = question.id,
-                            ),
-                        )
+                        // 题库点击仅查看题目详情，不再进入练题流程
+                        onQuestionClick(question.id)
                     },
                     onDelete = { deleteTarget = it },
                 )

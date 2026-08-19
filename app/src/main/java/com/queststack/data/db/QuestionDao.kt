@@ -30,6 +30,10 @@ interface QuestionDao {
     @Query("SELECT * FROM questions WHERE id = :id")
     suspend fun getById(id: Long): Question?
 
+    /** 按 id 观察单题（详情页用，编辑后库更新自动触发刷新） */
+    @Query("SELECT * FROM questions WHERE id = :id")
+    fun observeById(id: Long): Flow<Question?>
+
     @Query("DELETE FROM questions WHERE id = :id")
     suspend fun deleteById(id: Long)
 

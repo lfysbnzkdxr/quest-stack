@@ -232,6 +232,7 @@ class BackupRepositoryTest {
         override fun observeAll(): Flow<List<Question>> = flowOf(data.toList())
         override fun observeFiltered(categoryId: Long?, difficulty: Int?): Flow<List<Question>> = flowOf(data.toList())
         override suspend fun getById(id: Long): Question? = data.firstOrNull { it.id == id }
+        override fun observeById(id: Long): Flow<Question?> = flowOf(data.firstOrNull { it.id == id })
         override suspend fun deleteById(id: Long) { data.removeAll { it.id == id } }
         override suspend fun getIds(categoryId: Long?, difficulty: Int?): List<Long> = data.map { it.id }
         override fun observeCategoryCounts(): Flow<List<CategoryCount>> = flowOf(emptyList())
