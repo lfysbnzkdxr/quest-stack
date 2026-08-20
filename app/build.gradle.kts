@@ -15,8 +15,8 @@ android {
         applicationId = "com.queststack"
         minSdk = 33
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         ksp {
             arg("room.schemaLocation", "$projectDir/schemas")
@@ -27,6 +27,8 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            // 本地无正式 keystore.properties 时用 debug 签名兜底，保证预览版可安装
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
