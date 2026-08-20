@@ -3,6 +3,7 @@ package com.queststack.data.repository
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -19,6 +20,8 @@ data class AiConfig(
     val baseUrl: String = "",
     val apiKey: String = "",
     val model: String = "",
+    val presetId: String = "",
+    val temperature: Float = 0.7f,
     val timeoutSeconds: Int = 30
 )
 
@@ -33,6 +36,8 @@ class SettingsRepository(context: Context) {
             baseUrl = prefs[KEY_BASE_URL] ?: "",
             apiKey = SecureStorage.decrypt(prefs[KEY_API_KEY] ?: ""),
             model = prefs[KEY_MODEL] ?: "",
+            presetId = prefs[KEY_PRESET_ID] ?: "",
+            temperature = prefs[KEY_TEMPERATURE] ?: 0.7f,
             timeoutSeconds = prefs[KEY_TIMEOUT_SECONDS] ?: 30
         )
     }
@@ -51,6 +56,8 @@ class SettingsRepository(context: Context) {
             prefs[KEY_BASE_URL] = config.baseUrl
             prefs[KEY_API_KEY] = SecureStorage.encrypt(config.apiKey)
             prefs[KEY_MODEL] = config.model
+            prefs[KEY_PRESET_ID] = config.presetId
+            prefs[KEY_TEMPERATURE] = config.temperature
             prefs[KEY_TIMEOUT_SECONDS] = config.timeoutSeconds
         }
     }
@@ -95,6 +102,8 @@ class SettingsRepository(context: Context) {
         val KEY_BASE_URL = stringPreferencesKey("base_url")
         val KEY_API_KEY = stringPreferencesKey("api_key")
         val KEY_MODEL = stringPreferencesKey("model")
+        val KEY_PRESET_ID = stringPreferencesKey("preset_id")
+        val KEY_TEMPERATURE = floatPreferencesKey("temperature")
         val KEY_TIMEOUT_SECONDS = intPreferencesKey("timeout_seconds")
         val KEY_THEME_MODE = intPreferencesKey("theme_mode")
         val KEY_WEBDAV_URL = stringPreferencesKey("webdav_url")
