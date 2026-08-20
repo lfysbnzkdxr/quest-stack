@@ -35,6 +35,38 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+/** 内容区块：小标题 + 可选 Card 容器，对齐设置页 SettingsSectionCard 风格
+ *  framed=true（默认）用于只读展示（如详情查看态的 Text）；
+ *  framed=false 仅渲染小标题 + 内容，用于自带边框的输入框（避免与 TextField 边框叠加成双层） */
+@Composable
+fun ContentBlock(
+    title: String,
+    modifier: Modifier = Modifier,
+    framed: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = title,
+            fontSize = 13.sp,
+            color = MiuixTheme.colorScheme.onBackgroundVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        if (framed) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 16.dp,
+                insideMargin = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+            ) {
+                content()
+            }
+        } else {
+            content()
+        }
+    }
+}
 
 /** 分类选择（收缩式下拉，样式与题库筛选栏一致；选项：未分类 + 各分类）
  *  modifier 默认全宽；与难度并排一行时传 weight(1f) */

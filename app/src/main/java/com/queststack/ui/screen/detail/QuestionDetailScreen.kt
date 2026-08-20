@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.queststack.ui.component.AiActionButtons
 import com.queststack.ui.component.AnswerText
+import com.queststack.ui.component.ContentBlock
 import com.queststack.ui.component.CategorySelector
 import com.queststack.ui.component.DifficultySelector
 import com.queststack.ui.component.PageScaffold
@@ -181,14 +182,18 @@ private fun ViewContent(uiState: QuestionDetailUiState) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 16.dp),
         ) {
-            Text(
-                text = question.title,
-                fontSize = 22.sp,
-                lineHeight = 30.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MiuixTheme.colorScheme.onBackground,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+            // 问题区块
+            ContentBlock(title = "问题") {
+                Text(
+                    text = question.title,
+                    fontSize = 22.sp,
+                    lineHeight = 30.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            // 分类 / 难度（自身带背景，独立成行）
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MetaChip(
                     text = uiState.categories.firstOrNull { it.id == question.categoryId }?.name
@@ -200,18 +205,21 @@ private fun ViewContent(uiState: QuestionDetailUiState) {
                 )
             }
             Spacer(modifier = Modifier.height(20.dp))
-            if (question.answer.isBlank()) {
-                Text(
-                    text = "暂无答案",
-                    fontSize = 14.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                )
-            } else {
-                AnswerText(
-                    text = question.answer,
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MiuixTheme.colorScheme.onBackground,
-                )
+            // 答案区块
+            ContentBlock(title = "答案") {
+                if (question.answer.isBlank()) {
+                    Text(
+                        text = "暂无答案",
+                        fontSize = 14.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                } else {
+                    AnswerText(
+                        text = question.answer,
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -232,16 +240,20 @@ private fun EditContent(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 4.dp),
     ) {
-        // 与查看态布局一致：问题编辑栏 → 分类+难度并排 → 答案
-        TextField(
-            state = titleState,
-            modifier = Modifier.fillMaxWidth(),
-            label = "问题标题",
-            useLabelAsPlaceholder = true,
-            lineLimits = TextFieldLineLimits.SingleLine,
-        )
+        // 与查看态布局一致：问题 → 分类+难度并排 → 答案
+        // 编辑态输入框自带边框，区块不包 Card（framed=false），避免双层框
+        ContentBlock(title = "问题", framed = false) {
+            TextField(
+                state = titleState,
+                modifier = Modifier.fillMaxWidth(),
+                label = "问题标题",
+                useLabelAsPlaceholder = true,
+                lineLimits = TextFieldLineLimits.SingleLine,
+            )
+        }
         Spacer(modifier = Modifier.height(16.dp))
 
+        // 分类 + 难度（收缩式下拉并排，自身即明确控件）
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -260,13 +272,15 @@ private fun EditContent(
         }
         Spacer(modifier = Modifier.height(16.dp))
 
-        TextField(
-            state = answerState,
-            modifier = Modifier.fillMaxWidth(),
-            label = "答案或问答内容（选填）",
-            useLabelAsPlaceholder = true,
-            lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 12),
-        )
+        ContentBlock(title = "答案", framed = false) {
+            TextField(
+                state = answerState,
+                modifier = Modifier.fillMaxWidth(),
+                label = "答案或问答内容（选填）",
+                useLabelAsPlaceholder = true,
+                lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 12),
+            )
+        }
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(onClick = { viewModel.standardize() }) {
