@@ -40,6 +40,8 @@ import com.queststack.ui.screen.library.LibraryScreen
 import com.queststack.ui.screen.practice.PracticeSession
 import com.queststack.ui.screen.practice.PracticeSessionScreen
 import com.queststack.ui.screen.settings.SettingsScreen
+import com.queststack.ui.screen.settings.SettingsSubRoute
+import com.queststack.ui.screen.settings.SettingsSubScreen
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
@@ -75,6 +77,8 @@ fun MainScreen() {
     var practiceSession by remember { mutableStateOf<PracticeSession?>(null) }
     var addOpen by remember { mutableStateOf(false) }
     var detailQuestionId by remember { mutableStateOf<Long?>(null) }
+    // 设置二级页（全屏 overlay，盖在底部导航栏之上，参考 KernelSU 下钻）
+    var settingsSubRoute by remember { mutableStateOf<SettingsSubRoute?>(null) }
     // 首帧完成后再开启预加载，避免启动时同时创建三页（参考 KernelSU rememberContentReady）
     var contentReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { contentReady = true }
@@ -121,7 +125,9 @@ fun MainScreen() {
                                 onQuestionClick = { detailQuestionId = it },
                                 onAddClick = { addOpen = true },
                             )
-                            MainTab.Settings -> SettingsScreen()
+                            MainTab.Settings -> SettingsScreen(
+                                onNavigateSub = { settingsSubRoute = it },
+                            )
                         }
                     }
                 }
@@ -186,17 +192,25 @@ fun MainScreen() {
             if (addOpen) {
                 AddScreen(onBack = { addOpen = false })
             }
+            // 全屏 overlay：设置二级页（外观 / AI / 分类 / 备份 / 关于）
+            settingsSubRoute?.let { route ->
+                SettingsSubScreen(
+                    route = route,
+                    onBack = { settingsSubRoute = null },
+                )
+            }
         }
     }
     // 返回键优先级：先关 overlay（详情→添加→练题），再回主页 Tab，最后才退出应用
     BackHandler(
         enabled = practiceSession != null || detailQuestionId != null ||
-            addOpen || mainState.selectedPage != 0,
+            addOpen || settingsSubRoute != null || mainState.selectedPage != 0,
     ) {
         when {
             practiceSession != null -> practiceSession = null
             detailQuestionId != null -> detailQuestionId = null
             addOpen -> addOpen = false
+            settingsSubRoute != null -> settingsSubRoute = null
             mainState.selectedPage != 0 -> mainState.animateToPage(0)
         }
     }
