@@ -9,6 +9,7 @@ import com.queststack.data.backup.BackupRepository
 import com.queststack.data.backup.WebDavClient
 import com.queststack.data.backup.WebDavConfig
 import com.queststack.data.db.Category
+import com.queststack.ai.ChatMessage
 import com.queststack.data.repository.AiConfig
 import com.queststack.data.repository.CategoryRepository
 import com.queststack.data.repository.SettingsRepository
@@ -16,6 +17,7 @@ import com.queststack.ui.theme.AppSettings
 import com.queststack.ui.theme.ThemeMode
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +36,12 @@ data class SettingsUiState(
     val busyAction: String? = null,
     /** 统一提示文案（成功 / 错误），由 UI 弹出 Toast 后消费 */
     val message: String? = null,
+    /** 测试连接是否进行中 */
+    val testBusy: Boolean = false,
+    /** 测试连接结果文案（成功/失败），由 UI 展示 */
+    val testMessage: String? = null,
+    /** 获取模型列表的结果（实时拉取），null 表示尚未获取或获取失败 */
+    val modelList: List<String>? = null,
 )
 
 /**
@@ -101,6 +109,67 @@ class SettingsViewModel(
     fun saveAiConfig(config: AiConfig) {
         viewModelScope.launch {
             settingsRepository.setAiConfig(config)
+        }
+    }
+
+    /** 获取模型列表：调用 AiClient.listModels，结果写入 uiState.modelList（实时拉取，覆盖内嵌型号）。
+     * 传入的是当前（可能尚未保存）的配置，便于用户改完 Base URL/Key 后直接测试。 */
+    fun fetchModels(config: AiConfig) {
+        if (config.baseUrl.isBlank() || config.apiKey.isBlank()) {
+            _uiState.update { it.copy(message = "请先填写 Base URL 与 API Key") }
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val models = DataContainer.aiClient.listModels(config.baseUrl, config.apiKey, config.timeoutSeconds)
+                _uiState.update {
+                    it.copy(
+                        modelList = models,
+                        message = if (models.isEmpty()) "未获取到模型，请手动输入" else "已获取 ${models.size} 个模型",
+                    )
+                }
+            } catch (e: Exception) {
+                val msg = when (e) {
+                    is IOException -> "获取失败：网络错误或接口不可用"
+                    is TimeoutCancellationException -> "获取超时（${config.timeoutSeconds} 秒）"
+                    else -> "获取失败：${e.message ?: "未知错误"}"
+                }
+                _uiState.update { it.copy(modelList = null, message = msg) }
+            }
+        }
+    }
+
+    /** 测试连接：发一次最小 chat 请求，验证 chat 端点路径 + 选中模型可用 + 参数被接受。
+     * 传入当前（可能尚未保存）的配置。 */
+    fun testAiConnection(config: AiConfig) {
+        if (config.baseUrl.isBlank() || config.model.isBlank()) {
+            _uiState.update { it.copy(message = "请先填写 Base URL 与模型") }
+            return
+        }
+        if (_uiState.value.testBusy) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(testBusy = true, testMessage = null) }
+            val start = System.currentTimeMillis()
+            try {
+                DataContainer.aiClient.chat(
+                    baseUrl = config.baseUrl,
+                    apiKey = config.apiKey,
+                    model = config.model,
+                    messages = listOf(ChatMessage("user", "ping")),
+                    temperature = config.temperature,
+                    timeoutSeconds = minOf(config.timeoutSeconds, 15),
+                )
+                val cost = System.currentTimeMillis() - start
+                _uiState.update { it.copy(testBusy = false, testMessage = "连接成功（耗时 ${cost}ms）") }
+            } catch (e: Exception) {
+                val msg = when (e) {
+                    is IOException -> "连接失败：网络错误或接口不可用"
+                    is TimeoutCancellationException -> "连接超时（${minOf(config.timeoutSeconds, 15)} 秒）"
+                    is IllegalArgumentException -> "返回解析失败：${e.message}"
+                    else -> "连接失败：${e.message ?: "未知错误"}"
+                }
+                _uiState.update { it.copy(testBusy = false, testMessage = msg) }
+            }
         }
     }
 

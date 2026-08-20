@@ -128,6 +128,7 @@ class AddViewModel(
             try {
                 val answer = aiClient.generateAnswer(
                     config.baseUrl, config.apiKey, config.model, current.title,
+                    temperature = config.temperature,
                     timeoutSeconds = config.timeoutSeconds,
                 )
                 if (answer.isBlank()) {
@@ -163,6 +164,7 @@ class AddViewModel(
             try {
                 val optimized = aiClient.optimizeAnswer(
                     config.baseUrl, config.apiKey, config.model, current.title, current.answer,
+                    temperature = config.temperature,
                     timeoutSeconds = config.timeoutSeconds,
                 )
                 _uiState.update {
@@ -192,6 +194,7 @@ class AddViewModel(
             try {
                 val formatted = aiClient.formatAnswer(
                     config.baseUrl, config.apiKey, config.model, current.title, current.answer,
+                    temperature = config.temperature,
                     timeoutSeconds = config.timeoutSeconds,
                 )
                 if (formatted.isBlank()) {

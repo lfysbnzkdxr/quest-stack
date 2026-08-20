@@ -33,9 +33,10 @@ class AiClient(private val okHttpClient: OkHttpClient) {
         apiKey: String,
         model: String,
         messages: List<ChatMessage>,
+        temperature: Float = DEFAULT_TEMPERATURE,
         timeoutSeconds: Int = DEFAULT_TIMEOUT_SECONDS
     ): String {
-        val responseBody = execute(buildRequest(chatCompletionsUrl(baseUrl), apiKey, chatRequestBody(model, messages)), timeoutSeconds)
+        val responseBody = execute(buildRequest(chatCompletionsUrl(baseUrl), apiKey, chatRequestBody(model, messages, temperature)), timeoutSeconds)
         val content = json.parseToJsonElement(responseBody).jsonObject["choices"]
             ?.jsonArray
             ?.firstOrNull()
@@ -49,13 +50,15 @@ class AiClient(private val okHttpClient: OkHttpClient) {
         apiKey: String,
         model: String,
         title: String,
+        temperature: Float = DEFAULT_TEMPERATURE,
         timeoutSeconds: Int = DEFAULT_TIMEOUT_SECONDS
     ): String {
         val system = "你是一个面试辅导专家。针对给出的面试问题编写一份详细、结构清晰的参考答案。" +
             "直接输出回答文本，不要加任何前缀说明。"
         val body = chatRequestBody(
             model,
-            listOf(ChatMessage("system", system), ChatMessage("user", title))
+            listOf(ChatMessage("system", system), ChatMessage("user", title)),
+            temperature
         )
         return execute(buildRequest(chatCompletionsUrl(baseUrl), apiKey, body), timeoutSeconds).trim()
     }
@@ -67,13 +70,15 @@ class AiClient(private val okHttpClient: OkHttpClient) {
         model: String,
         title: String,
         answer: String,
+        temperature: Float = DEFAULT_TEMPERATURE,
         timeoutSeconds: Int = DEFAULT_TIMEOUT_SECONDS
     ): String {
         val system = "你是面试辅导专家。润色以下回答，使其更有条理、更专业、更适合面试口述。" +
             "直接输出润色后的回答文本，不要加任何前缀说明。"
         val body = chatRequestBody(
             model,
-            listOf(ChatMessage("system", system), ChatMessage("user", "问题：$title\n\n我的回答：$answer"))
+            listOf(ChatMessage("system", system), ChatMessage("user", "问题：$title\n\n我的回答：$answer")),
+            temperature
         )
         return execute(buildRequest(chatCompletionsUrl(baseUrl), apiKey, body), timeoutSeconds).trim()
     }
@@ -85,24 +90,52 @@ class AiClient(private val okHttpClient: OkHttpClient) {
         model: String,
         title: String,
         answer: String,
+        temperature: Float = DEFAULT_TEMPERATURE,
         timeoutSeconds: Int = DEFAULT_TIMEOUT_SECONDS
     ): String {
         val system = "将以下面试问答内容整理为一份结构清晰、条理分明的参考答案。" +
             "直接输出整理后的回答文本，不要加任何前缀说明。"
         val body = chatRequestBody(
             model,
-            listOf(ChatMessage("system", system), ChatMessage("user", "问题：$title\n\n内容：$answer"))
+            listOf(ChatMessage("system", system), ChatMessage("user", "问题：$title\n\n内容：$answer")),
+            temperature
         )
         return execute(buildRequest(chatCompletionsUrl(baseUrl), apiKey, body), timeoutSeconds).trim()
     }
 
-    /** 构建 {baseUrl}/v1/chat/completions，baseUrl 已含 /v1 则不重复加 */
-    private fun chatCompletionsUrl(baseUrl: String): String {
-        val trimmed = baseUrl.trim().trimEnd('/')
-        return if (trimmed.endsWith("/v1")) "$trimmed/chat/completions" else "$trimmed/v1/chat/completions"
+    /** 拉取模型列表：GET {baseUrl}/models（兼容 /v1、/v3、/v4 端点），返回模型 id 列表 */
+    suspend fun listModels(
+        baseUrl: String,
+        apiKey: String,
+        timeoutSeconds: Int = DEFAULT_TIMEOUT_SECONDS
+    ): List<String> {
+        val responseBody = execute(buildRequest(modelsUrl(baseUrl), apiKey, "", "GET"), timeoutSeconds)
+        return try {
+            json.parseToJsonElement(responseBody).jsonObject["data"]
+                ?.jsonArray
+                ?.mapNotNull { it.jsonObject["id"]?.jsonPrimitive?.contentOrNull }
+                .orEmpty()
+        } catch (e: Exception) {
+            throw IllegalArgumentException("解析模型列表失败：${e.message}")
+        }
     }
 
-    private fun chatRequestBody(model: String, messages: List<ChatMessage>): String =
+    /** 构建 chat/completions 地址：兼容 OpenAI(/v1) 与智谱(/v4)、火山方舟(/v3) 等端点 */
+    private fun chatCompletionsUrl(baseUrl: String): String {
+        val trimmed = baseUrl.trim().trimEnd('/')
+        return when {
+            trimmed.endsWith("/chat/completions") -> trimmed
+            trimmed.endsWith("/v1") -> "$trimmed/chat/completions"
+            trimmed.endsWith("/v3") || trimmed.endsWith("/v4") -> "$trimmed/chat/completions"
+            else -> "$trimmed/v1/chat/completions"
+        }
+    }
+
+    /** 构建模型列表地址：由 chat 地址派生，把 /chat/completions 替换为 /models */
+    private fun modelsUrl(baseUrl: String): String =
+        chatCompletionsUrl(baseUrl).replace("/chat/completions", "/models")
+
+    private fun chatRequestBody(model: String, messages: List<ChatMessage>, temperature: Float): String =
         buildJsonObject {
             put("model", model)
             put("messages", JsonArray(messages.map { message ->
@@ -111,13 +144,17 @@ class AiClient(private val okHttpClient: OkHttpClient) {
                     put("content", message.content)
                 }
             }))
-            put("temperature", 0.7)
+            put("temperature", temperature)
         }.toString()
 
-    private fun buildRequest(url: String, apiKey: String, body: String): Request {
+    private fun buildRequest(url: String, apiKey: String, body: String, method: String = "POST"): Request {
         val builder = Request.Builder()
             .url(url)
-            .post(body.toRequestBody(JSON_MEDIA_TYPE))
+        if (method.equals("GET", ignoreCase = true)) {
+            builder.get()
+        } else {
+            builder.post(body.toRequestBody(JSON_MEDIA_TYPE))
+        }
         if (apiKey.isNotBlank()) {
             builder.header("Authorization", "Bearer $apiKey")
         }
@@ -140,6 +177,7 @@ class AiClient(private val okHttpClient: OkHttpClient) {
 
     companion object {
         const val DEFAULT_TIMEOUT_SECONDS = 30
+        const val DEFAULT_TEMPERATURE = 0.7f
 
         private val json = Json { ignoreUnknownKeys = true }
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()

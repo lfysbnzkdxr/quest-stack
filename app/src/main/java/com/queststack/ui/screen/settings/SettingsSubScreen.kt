@@ -21,29 +21,41 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import com.queststack.ai.PRESETS
+import com.queststack.ai.ModelPreset
+import top.yukonga.miuix.kmp.basic.Slider
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -51,6 +63,8 @@ import com.queststack.data.backup.WebDavConfig
 import com.queststack.data.db.Category
 import com.queststack.data.repository.AiConfig
 import com.queststack.ui.component.PageScaffold
+import com.queststack.ui.component.FilterDropdownButton
+import com.queststack.ui.component.DropdownRow
 import com.queststack.ui.theme.AppSettings
 import com.queststack.ui.theme.ThemeMode
 import java.time.LocalDate
@@ -169,81 +183,315 @@ private fun AiContent(
     val baseUrlState = remember { TextFieldState() }
     val apiKeyState = remember { TextFieldState() }
     val modelState = remember { TextFieldState() }
-    val timeoutState = remember { TextFieldState() }
+    var presetId by remember { mutableStateOf(uiState.aiConfig.presetId.ifBlank { "custom" }) }
+    var temperature by remember { mutableStateOf(0.7f) }
+    var timeoutSeconds by remember { mutableStateOf(30) }
+
+    var providerPickerOpen by remember { mutableStateOf(false) }
+    var modelPickerOpen by remember { mutableStateOf(false) }
+    var fieldHeight by remember { mutableIntStateOf(0) }
+    var fieldWidth by remember { mutableIntStateOf(0) }
+
     LaunchedEffect(uiState.aiConfig) {
         baseUrlState.edit { replace(0, length, uiState.aiConfig.baseUrl) }
         apiKeyState.edit { replace(0, length, uiState.aiConfig.apiKey) }
         modelState.edit { replace(0, length, uiState.aiConfig.model) }
-        timeoutState.edit { replace(0, length, uiState.aiConfig.timeoutSeconds.toString()) }
+        presetId = uiState.aiConfig.presetId.ifBlank { "custom" }
+        temperature = uiState.aiConfig.temperature
+        timeoutSeconds = uiState.aiConfig.timeoutSeconds
     }
 
-    SettingsSectionCard("AI 接口") {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextField(
-                state = baseUrlState,
-                modifier = Modifier.fillMaxWidth(),
-                label = "Base URL（示例 https://api.openai.com/v1）",
-                useLabelAsPlaceholder = true,
-                lineLimits = TextFieldLineLimits.SingleLine,
-            )
-            TextField(
-                state = apiKeyState,
-                modifier = Modifier.fillMaxWidth(),
-                label = "API Key",
-                useLabelAsPlaceholder = true,
-                lineLimits = TextFieldLineLimits.SingleLine,
-            )
-            TextField(
-                state = modelState,
-                modifier = Modifier.fillMaxWidth(),
-                label = "模型（示例 gpt-4o）",
-                useLabelAsPlaceholder = true,
-                lineLimits = TextFieldLineLimits.SingleLine,
-            )
-            TextField(
-                state = timeoutState,
-                modifier = Modifier.fillMaxWidth(),
-                label = "超时秒数（示例 30）",
-                useLabelAsPlaceholder = true,
-                lineLimits = TextFieldLineLimits.SingleLine,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            Button(
-                onClick = {
-                    val baseUrl = baseUrlState.text.toString().trim()
-                    val model = modelState.text.toString().trim()
-                    val apiKey = apiKeyState.text.toString().trim()
-                    val timeout = timeoutState.text.toString().trim().toIntOrNull() ?: 30
-                    when {
-                        baseUrl.isEmpty() ->
-                            Toast.makeText(context, "Base URL 不能为空", Toast.LENGTH_SHORT).show()
-                        model.isEmpty() ->
-                            Toast.makeText(context, "模型不能为空", Toast.LENGTH_SHORT).show()
-                        else -> {
-                            viewModel.saveAiConfig(
-                                AiConfig(
-                                    baseUrl = baseUrl,
-                                    apiKey = apiKey,
-                                    model = model,
-                                    timeoutSeconds = timeout,
-                                ),
-                            )
-                            Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                },
-                colors = ButtonDefaults.buttonColorsPrimary(),
+    fun buildConfig() = AiConfig(
+        baseUrl = baseUrlState.text.toString().trim(),
+        apiKey = apiKeyState.text.toString().trim(),
+        model = modelState.text.toString().trim(),
+        presetId = presetId,
+        temperature = temperature,
+        timeoutSeconds = timeoutSeconds,
+    )
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        // 1. 供应商预设
+        SettingsSectionCard("预设供应商") {
+            val presetName = when (presetId) {
+                "custom" -> "自定义配置"
+                else -> PRESETS.firstOrNull { it.id == presetId }?.name ?: "自定义配置"
+            }
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp),
+                    .onSizeChanged {
+                        fieldHeight = it.height
+                        fieldWidth = it.width
+                    },
             ) {
-                Text(text = "保存配置", fontSize = 14.sp)
+                FilterDropdownButton(
+                    label = "$presetName",
+                    expanded = providerPickerOpen,
+                    onClick = { providerPickerOpen = true },
+                )
+                if (providerPickerOpen) {
+                    Popup(
+                        alignment = Alignment.TopEnd,
+                        offset = IntOffset(0, fieldHeight + with(LocalDensity.current) { 4.dp.roundToPx() }),
+                        onDismissRequest = { providerPickerOpen = false },
+                        properties = PopupProperties(focusable = true),
+                    ) {
+                        SupplierDropdownPanel(
+                            panelWidth = with(LocalDensity.current) { minOf(fieldWidth, 280.dp.roundToPx()).toDp() },
+                            currentPresetId = presetId,
+                            onSelect = { id, url ->
+                                presetId = id
+                                if (url != null) baseUrlState.edit { replace(0, length, url) }
+                                providerPickerOpen = false
+                            },
+                        )
+                    }
+                }
             }
+        }
+
+        // 2. 连接配置
+        SettingsSectionCard("连接配置") {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                TextField(
+                    state = baseUrlState,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "Base URL",
+                    useLabelAsPlaceholder = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
+                )
+                TextField(
+                    state = apiKeyState,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "API Key",
+                    useLabelAsPlaceholder = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("超时（秒）", fontSize = 14.sp, color = MiuixTheme.colorScheme.onBackground)
+                    Spacer(Modifier.weight(1f))
+                    Text(timeoutSeconds.toString(), fontSize = 14.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                }
+                Slider(
+                    value = timeoutSeconds.toFloat(),
+                    onValueChange = { timeoutSeconds = it.roundToInt() },
+                    modifier = Modifier.fillMaxWidth(),
+                    valueRange = 5f..120f,
+                    steps = 115,
+                )
+            }
+        }
+
+        // 3. 模型
+        SettingsSectionCard("模型") {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = { viewModel.fetchModels(buildConfig()) },
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                ) {
+                    Text(text = "获取模型列表", fontSize = 14.sp)
+                }
+                Button(
+                    onClick = { modelPickerOpen = true },
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                ) {
+                    Text(
+                        text = if (modelState.text.isBlank()) "选择模型" else "模型：${modelState.text}",
+                        fontSize = 14.sp,
+                    )
+                }
+                Text(
+                    text = "当前模型：${if (modelState.text.isBlank()) "未选择" else modelState.text}",
+                    fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                )
+            }
+        }
+
+        // 4. 参数
+        SettingsSectionCard("参数") {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("温度", fontSize = 14.sp, color = MiuixTheme.colorScheme.onBackground)
+                    Spacer(Modifier.weight(1f))
+                    Text("%.1f".format(temperature), fontSize = 14.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                }
+                Slider(
+                    value = temperature,
+                    onValueChange = { temperature = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    valueRange = 0f..2f,
+                    steps = 20,
+                )
+                Text(
+                    text = "档位参考：0.2 严谨 · 0.7 平衡 · 1.2 发散（范围 0–2）",
+                    fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                )
+            }
+        }
+
+        // 操作
+        Spacer(Modifier.height(4.dp))
+        Button(
+            onClick = {
+                val config = buildConfig()
+                when {
+                    config.baseUrl.isEmpty() ->
+                        Toast.makeText(context, "Base URL 不能为空", Toast.LENGTH_SHORT).show()
+                    config.model.isEmpty() ->
+                        Toast.makeText(context, "模型不能为空", Toast.LENGTH_SHORT).show()
+                    else -> {
+                        viewModel.saveAiConfig(config)
+                        Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            colors = ButtonDefaults.buttonColorsPrimary(),
+            modifier = Modifier.fillMaxWidth().height(44.dp),
+        ) {
+            Text(text = "保存配置", fontSize = 14.sp)
+        }
+        Spacer(Modifier.height(10.dp))
+        Button(
+            onClick = { viewModel.testAiConnection(buildConfig()) },
+            enabled = !uiState.testBusy,
+            colors = ButtonDefaults.buttonColorsPrimary(),
+            modifier = Modifier.fillMaxWidth().height(44.dp),
+        ) {
             Text(
-                text = "AI 接口可选；未配置时 AI 功能不可用，本地功能不受影响",
-                fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+                text = if (uiState.testBusy) "连接测试中…" else "测试连接",
+                fontSize = 14.sp,
             )
+        }
+        uiState.testMessage?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(text = it, fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "AI 接口可选；未配置时 AI 功能不可用，本地功能不受影响。先填 API Key 再「获取模型列表」选择模型。",
+            fontSize = 12.sp,
+            color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+        )
+        Spacer(Modifier.height(20.dp))
+    }
+
+    if (modelPickerOpen) {
+        ModelPickerDialog(
+            modelList = uiState.modelList,
+            modelState = modelState,
+            onFetch = { viewModel.fetchModels(buildConfig()) },
+            onDismiss = { modelPickerOpen = false },
+        )
+    }
+}
+
+/** 供应商下拉面板（KernelSU 收缩式下拉，从字段右端向左下弹出） */
+@Composable
+private fun SupplierDropdownPanel(
+    panelWidth: Dp,
+    currentPresetId: String,
+    onSelect: (id: String, defaultBaseUrl: String?) -> Unit,
+) {
+    val items = listOf(ModelPreset("custom", "自定义", "")) + PRESETS
+    Card(
+        modifier = Modifier
+            .width(panelWidth)
+            .dropShadow(
+                shape = RoundedCornerShape(16.dp),
+                shadow = Shadow(radius = 12.dp, color = Color.Black, alpha = 0.15f),
+            ),
+        cornerRadius = 16.dp,
+        insideMargin = PaddingValues(0.dp),
+    ) {
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+            items.forEach { item ->
+                DropdownRow(
+                    text = item.name,
+                    isSelected = item.id == currentPresetId,
+                    onClick = { onSelect(item.id, item.defaultBaseUrl.ifBlank { null }) },
+                )
+            }
+        }
+    }
+}
+
+/** 模型选择器对话框：展示实时拉取的模型列表 + 手动输入兜底 */
+@Composable
+private fun ModelPickerDialog(
+    modelList: List<String>?,
+    modelState: TextFieldState,
+    onFetch: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("选择模型", fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(8.dp))
+                when {
+                    modelList == null ->
+                        Text("尚未获取模型列表，请先点「获取模型列表」，或手动输入", fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                    modelList.isEmpty() ->
+                        Text("未获取到模型，请手动输入", fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                    else -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(240.dp)
+                                .verticalScroll(rememberScrollState()),
+                        ) {
+                            modelList.forEach { m ->
+                                val selected = modelState.text.toString() == m
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            modelState.edit { replace(0, length, m) }
+                                            onDismiss()
+                                        }
+                                        .padding(vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = m,
+                                        fontSize = 14.sp,
+                                        color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onBackground,
+                                    )
+                                }
+                                Box(Modifier.fillMaxWidth().height(1.dp).background(MiuixTheme.colorScheme.dividerLine))
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("手动输入", fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                TextField(
+                    state = modelState,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "模型名称",
+                    useLabelAsPlaceholder = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(text = "获取模型列表", onClick = onFetch)
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = onDismiss, colors = ButtonDefaults.buttonColorsPrimary()) {
+                        Text("完成")
+                    }
+                }
+            }
         }
     }
 }
