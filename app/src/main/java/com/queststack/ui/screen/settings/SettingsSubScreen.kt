@@ -26,12 +26,10 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import kotlin.math.roundToInt
@@ -40,19 +38,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.draw.dropShadow
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import com.queststack.ai.PRESETS
 import com.queststack.ai.ModelPreset
 import top.yukonga.miuix.kmp.basic.Slider
@@ -64,7 +54,6 @@ import com.queststack.data.db.Category
 import com.queststack.data.repository.AiConfig
 import com.queststack.ui.component.PageScaffold
 import com.queststack.ui.component.FilterDropdownButton
-import com.queststack.ui.component.DropdownRow
 import com.queststack.ui.theme.AppSettings
 import com.queststack.ui.theme.ThemeMode
 import java.time.LocalDate
@@ -77,6 +66,11 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.window.WindowCascadingListPopup
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
 import top.yukonga.miuix.kmp.icon.extended.Delete
@@ -189,8 +183,6 @@ private fun AiContent(
 
     var providerPickerOpen by remember { mutableStateOf(false) }
     var modelPickerOpen by remember { mutableStateOf(false) }
-    var fieldHeight by remember { mutableIntStateOf(0) }
-    var fieldWidth by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(uiState.aiConfig) {
         baseUrlState.edit { replace(0, length, uiState.aiConfig.baseUrl) }
@@ -219,37 +211,45 @@ private fun AiContent(
                 "custom" -> "自定义配置"
                 else -> PRESETS.firstOrNull { it.id == presetId }?.name ?: "自定义配置"
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onSizeChanged {
-                        fieldHeight = it.height
-                        fieldWidth = it.width
-                    },
-            ) {
+            Box(modifier = Modifier.fillMaxWidth()) {
                 FilterDropdownButton(
-                    label = "$presetName",
+                    label = presetName,
                     expanded = providerPickerOpen,
                     onClick = { providerPickerOpen = true },
                 )
-                if (providerPickerOpen) {
-                    Popup(
-                        alignment = Alignment.TopEnd,
-                        offset = IntOffset(0, fieldHeight + with(LocalDensity.current) { 4.dp.roundToPx() }),
-                        onDismissRequest = { providerPickerOpen = false },
-                        properties = PopupProperties(focusable = true),
-                    ) {
-                        SupplierDropdownPanel(
-                            panelWidth = with(LocalDensity.current) { minOf(fieldWidth, 280.dp.roundToPx()).toDp() },
-                            currentPresetId = presetId,
-                            onSelect = { id, url ->
-                                presetId = id
-                                if (url != null) baseUrlState.edit { replace(0, length, url) }
-                                providerPickerOpen = false
+                WindowCascadingListPopup(
+                    show = providerPickerOpen,
+                    entries = listOf(
+                        DropdownEntry(
+                            items = buildList {
+                                add(
+                                    DropdownItem(
+                                        text = "自定义配置",
+                                        selected = presetId == "custom",
+                                        onClick = { presetId = "custom"; providerPickerOpen = false },
+                                    ),
+                                )
+                                PRESETS.forEach { p ->
+                                    add(
+                                        DropdownItem(
+                                            text = p.name,
+                                            selected = presetId == p.id,
+                                            onClick = {
+                                                presetId = p.id
+                                                if (p.defaultBaseUrl.isNotBlank()) {
+                                                    baseUrlState.edit { replace(0, length, p.defaultBaseUrl) }
+                                                }
+                                                providerPickerOpen = false
+                                            },
+                                        ),
+                                    )
+                                }
                             },
-                        )
-                    }
-                }
+                        ),
+                    ),
+                    onDismissRequest = { providerPickerOpen = false },
+                    enableWindowDim = false,
+                )
             }
         }
 
@@ -396,36 +396,6 @@ private fun AiContent(
     }
 }
 
-/** 供应商下拉面板（KernelSU 收缩式下拉，从字段右端向左下弹出） */
-@Composable
-private fun SupplierDropdownPanel(
-    panelWidth: Dp,
-    currentPresetId: String,
-    onSelect: (id: String, defaultBaseUrl: String?) -> Unit,
-) {
-    val items = listOf(ModelPreset("custom", "自定义", "")) + PRESETS
-    Card(
-        modifier = Modifier
-            .width(panelWidth)
-            .dropShadow(
-                shape = RoundedCornerShape(16.dp),
-                shadow = Shadow(radius = 12.dp, color = Color.Black, alpha = 0.15f),
-            ),
-        cornerRadius = 16.dp,
-        insideMargin = PaddingValues(0.dp),
-    ) {
-        Column(modifier = Modifier.padding(vertical = 4.dp)) {
-            items.forEach { item ->
-                DropdownRow(
-                    text = item.name,
-                    isSelected = item.id == currentPresetId,
-                    onClick = { onSelect(item.id, item.defaultBaseUrl.ifBlank { null }) },
-                )
-            }
-        }
-    }
-}
-
 /** 模型选择器对话框：展示实时拉取的模型列表 + 手动输入兜底 */
 @Composable
 private fun ModelPickerDialog(
@@ -546,13 +516,13 @@ private fun CategoryContent(
             }
             if (index != uiState.categories.lastIndex) {
                 Spacer(modifier = Modifier.height(10.dp))
-                DividerLine()
+                HorizontalDivider()
                 Spacer(modifier = Modifier.height(10.dp))
             }
         }
         if (uiState.categories.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
-            DividerLine()
+            HorizontalDivider()
             Spacer(modifier = Modifier.height(4.dp))
         }
         TextButton(
@@ -651,7 +621,7 @@ private fun BackupContent(
                     )
                 }
             }
-            DividerLine()
+            HorizontalDivider()
             Text(
                 text = "WebDAV",
                 fontSize = 13.sp,
@@ -745,7 +715,7 @@ private fun AboutContent() {
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
             Spacer(modifier = Modifier.height(4.dp))
-            DividerLine()
+            HorizontalDivider()
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "UI 基于 Miuix (top.yukonga.miuix.kmp) · 图标来自 Miuix Icons",
@@ -763,12 +733,7 @@ private fun SettingsSectionCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column {
-        Text(
-            text = title,
-            fontSize = 13.sp,
-            color = MiuixTheme.colorScheme.onBackgroundVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
+        SmallTitle(text = title, insideMargin = PaddingValues(0.dp, 8.dp))
         Card(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 16.dp,
@@ -778,17 +743,6 @@ private fun SettingsSectionCard(
         }
         Spacer(modifier = Modifier.height(20.dp))
     }
-}
-
-/** 细分割线 */
-@Composable
-private fun DividerLine() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(0.75.dp)
-            .background(MiuixTheme.colorScheme.dividerLine),
-    )
 }
 
 /** 外观主题三选一 chip：当前主题高亮 */
