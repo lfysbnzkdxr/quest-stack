@@ -1,9 +1,6 @@
 package com.queststack.ui.screen.settings
 
 import android.app.Application
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -31,6 +28,7 @@ import com.queststack.ui.component.PageScaffold
 import com.queststack.ui.theme.AppSettings
 import com.queststack.ui.theme.ThemeMode
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -65,52 +63,44 @@ fun SettingsScreen(
                     .nestedScroll(scrollBehavior.nestedScrollConnection)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    cornerRadius = 16.dp,
-                    insideMargin = PaddingValues(0.dp),
-                ) {
-                    Column {
-                        SettingsRow(
-                            icon = MiuixIcons.Theme,
-                            title = "外观",
-                            summary = when (AppSettings.themeMode) {
-                                ThemeMode.System -> "跟随系统"
-                                ThemeMode.Light -> "浅色"
-                                ThemeMode.Dark -> "深色"
-                            },
-                            onClick = { onNavigateSub(SettingsSubRoute.Appearance) },
-                        )
-                        SettingsDivider()
-                        SettingsRow(
-                            icon = null,
-                            title = "AI 接口设置",
-                            summary = if (uiState.aiConfig.apiKey.isBlank()) "未配置" else "已配置",
-                            onClick = { onNavigateSub(SettingsSubRoute.Ai) },
-                        )
-                        SettingsDivider()
-                        SettingsRow(
-                            icon = MiuixIcons.Folder,
-                            title = "分类管理",
-                            summary = "${uiState.categories.size} 个分类",
-                            onClick = { onNavigateSub(SettingsSubRoute.Category) },
-                        )
-                        SettingsDivider()
-                        SettingsRow(
-                            icon = MiuixIcons.Backup,
-                            title = "数据备份",
-                            summary = "本地与 WebDAV",
-                            onClick = { onNavigateSub(SettingsSubRoute.Backup) },
-                        )
-                        SettingsDivider()
-                        SettingsRow(
-                            icon = MiuixIcons.Info,
-                            title = "关于",
-                            summary = "版本 0.1.0",
-                            onClick = { onNavigateSub(SettingsSubRoute.About) },
-                        )
-                    }
-                }
+                SettingsRow(
+                    icon = MiuixIcons.Theme,
+                    title = "外观",
+                    summary = when (AppSettings.themeMode) {
+                        ThemeMode.System -> "跟随系统"
+                        ThemeMode.Light -> "浅色"
+                        ThemeMode.Dark -> "深色"
+                    },
+                    onClick = { onNavigateSub(SettingsSubRoute.Appearance) },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsRow(
+                    icon = null,
+                    title = "AI 接口设置",
+                    summary = if (uiState.aiConfig.apiKey.isBlank()) "未配置" else "已配置",
+                    onClick = { onNavigateSub(SettingsSubRoute.Ai) },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsRow(
+                    icon = MiuixIcons.Folder,
+                    title = "分类管理",
+                    summary = "${uiState.categories.size} 个分类",
+                    onClick = { onNavigateSub(SettingsSubRoute.Category) },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsRow(
+                    icon = MiuixIcons.Backup,
+                    title = "数据备份",
+                    summary = "本地与 WebDAV",
+                    onClick = { onNavigateSub(SettingsSubRoute.Backup) },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsRow(
+                    icon = MiuixIcons.Info,
+                    title = "关于",
+                    summary = "版本 0.1.0",
+                    onClick = { onNavigateSub(SettingsSubRoute.About) },
+                )
                 Spacer(modifier = Modifier.height(20.dp))
             }
         }
@@ -124,53 +114,47 @@ private fun SettingsRow(
     summary: String,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Card(
+        onClick = onClick,
+        pressFeedbackType = PressFeedbackType.Sink,
+        cornerRadius = 16.dp,
+        insideMargin = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
     ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MiuixTheme.colorScheme.onBackground,
-                modifier = Modifier
-                    .padding(end = 16.dp)
-                    .size(24.dp),
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                fontSize = 16.sp,
-                color = MiuixTheme.colorScheme.onBackground,
-            )
-            if (summary.isNotBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = summary,
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.onBackground,
+                    modifier = Modifier
+                        .padding(end = 16.dp)
+                        .size(24.dp),
                 )
             }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 16.sp,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+                if (summary.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = summary,
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                }
+            }
+            Icon(
+                imageVector = MiuixIcons.ChevronForward,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onBackgroundVariant,
+                modifier = Modifier.size(18.dp),
+            )
         }
-        Icon(
-            imageVector = MiuixIcons.ChevronForward,
-            contentDescription = null,
-            tint = MiuixTheme.colorScheme.onBackgroundVariant,
-            modifier = Modifier.size(18.dp),
-        )
     }
-}
-
-@Composable
-private fun SettingsDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(0.75.dp)
-            .background(MiuixTheme.colorScheme.dividerLine),
-    )
 }
