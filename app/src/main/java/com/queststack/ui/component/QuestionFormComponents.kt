@@ -26,7 +26,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowCascadingListPopup
 
-/** 内容区块：小标题 + 可选 Card 容器，对齐设置页 SettingsSectionCard 风格
+/** 内容区块：小标题 + 可选 Card 容器，对齐设置页 SettingsCard 风格
  *  framed=true（默认）用于只读展示（如详情查看态的 Text）；
  *  framed=false 仅渲染小标题 + 内容，用于自带边框的输入框（避免与 TextField 边框叠加成双层） */
 @Composable
