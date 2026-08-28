@@ -1,6 +1,5 @@
 package com.queststack.ui.screen.detail
 
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -29,7 +28,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,6 +44,8 @@ import com.queststack.ui.screen.library.difficultyLabel
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.SnackbarHost
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -65,7 +65,7 @@ fun QuestionDetailScreen(
         initializer = { QuestionDetailViewModel(questionId) },
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val aiConfig = uiState.aiConfig
     val aiConfigured = aiConfig != null && aiConfig.baseUrl.isNotBlank() && aiConfig.model.isNotBlank()
@@ -102,65 +102,71 @@ fun QuestionDetailScreen(
     }
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            snackbarHostState.showSnackbar(it)
             viewModel.consumeMessage()
         }
     }
 
-    PageScaffold(
-        title = if (editing) "编辑题目" else "题目详情",
-        navigationIcon = {
-            IconButton(onClick = { if (editing) editing = false else onBack() }) {
-                Icon(
-                    imageVector = MiuixIcons.ChevronBackward,
-                    contentDescription = if (editing) "取消编辑" else "返回",
-                    tint = MiuixTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-        },
-        actions = {
-            if (editing) {
-                IconButton(
-                    onClick = { viewModel.save() },
-                    enabled = uiState.title.isNotBlank() && !uiState.saving,
-                ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        PageScaffold(
+            title = if (editing) "编辑题目" else "题目详情",
+            navigationIcon = {
+                IconButton(onClick = { if (editing) editing = false else onBack() }) {
                     Icon(
-                        imageVector = MiuixIcons.Basic.Check,
-                        contentDescription = "保存",
+                        imageVector = MiuixIcons.ChevronBackward,
+                        contentDescription = if (editing) "取消编辑" else "返回",
                         tint = MiuixTheme.colorScheme.onBackground,
                         modifier = Modifier.size(22.dp),
                     )
                 }
-            } else {
-                IconButton(
-                    onClick = {
-                        viewModel.startEdit()
-                        editing = true
-                    },
-                    enabled = uiState.question != null,
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Edit,
-                        contentDescription = "编辑",
-                        tint = MiuixTheme.colorScheme.onBackground,
-                        modifier = Modifier.size(20.dp),
-                    )
+            },
+            actions = {
+                if (editing) {
+                    IconButton(
+                        onClick = { viewModel.save() },
+                        enabled = uiState.title.isNotBlank() && !uiState.saving,
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Basic.Check,
+                            contentDescription = "保存",
+                            tint = MiuixTheme.colorScheme.onBackground,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = {
+                            viewModel.startEdit()
+                            editing = true
+                        },
+                        enabled = uiState.question != null,
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Edit,
+                            contentDescription = "编辑",
+                            tint = MiuixTheme.colorScheme.onBackground,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
+            },
+        ) { _ ->
+            if (editing) {
+                EditContent(
+                    uiState = uiState,
+                    titleState = titleState,
+                    answerState = answerState,
+                    aiConfigured = aiConfigured,
+                    viewModel = viewModel,
+                )
+            } else {
+                ViewContent(uiState = uiState)
             }
-        },
-    ) { _ ->
-        if (editing) {
-            EditContent(
-                uiState = uiState,
-                titleState = titleState,
-                answerState = answerState,
-                aiConfigured = aiConfigured,
-                viewModel = viewModel,
-            )
-        } else {
-            ViewContent(uiState = uiState)
         }
+        SnackbarHost(
+            state = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 

@@ -26,7 +26,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,6 +35,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.queststack.data.db.Question
 import com.queststack.ui.component.AnswerText
 import com.queststack.ui.component.CategoryFilterBar
+import com.queststack.ui.screen.library.difficultyColor
+import com.queststack.ui.screen.library.difficultyLabel
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -149,13 +150,13 @@ private fun FlashCard(
                                 .padding(horizontal = 10.dp, vertical = 4.dp),
                         )
                         Text(
-                            text = question.difficultyLabel(),
+                            text = difficultyLabel(question.difficulty),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            color = question.difficultyColor(),
+                            color = difficultyColor(question.difficulty),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(percent = 50))
-                                .background(question.difficultyColor().copy(alpha = 0.12f))
+                                .background(difficultyColor(question.difficulty).copy(alpha = 0.12f))
                                 .padding(horizontal = 10.dp, vertical = 4.dp),
                         )
                     }
@@ -269,19 +270,4 @@ private fun EmptyPlaceholder(onBack: () -> Unit) {
             }
         }
     }
-}
-
-/** 难度数值 → 展示文案（1=简单 2=中等 3=困难，非法值回退"简单"） */
-private fun Question.difficultyLabel(): String = when (difficulty) {
-    1 -> "简单"
-    2 -> "中等"
-    3 -> "困难"
-    else -> "简单"
-}
-
-private fun Question.difficultyColor(): Color = when (difficulty) {
-    1 -> Color(0xFF00A871)
-    2 -> Color(0xFFE8890C)
-    3 -> Color(0xFFE5484D)
-    else -> Color(0xFF00A871)
 }

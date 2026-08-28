@@ -34,8 +34,10 @@ data class SettingsUiState(
     val busy: Boolean = false,
     /** 当前忙碌操作标识（用于按钮上显示"处理中…"） */
     val busyAction: String? = null,
-    /** 统一提示文案（成功 / 错误），由 UI 弹出 Toast 后消费 */
+    /** 统一提示文案（成功 / 错误），由 UI 弹出 Snackbar 后消费 */
     val message: String? = null,
+    /** 模型获取提示文案：在模型选择对话框内展示（不走页面级 Snackbar，避免被窗口级对话框遮挡） */
+    val modelMessage: String? = null,
     /** 测试连接是否进行中 */
     val testBusy: Boolean = false,
     /** 测试连接结果文案（成功/失败），由 UI 展示 */
@@ -48,7 +50,7 @@ data class SettingsUiState(
  * 设置页 ViewModel。
  *
  * 备份/恢复类操作在 viewModelScope + Dispatchers.IO 中执行，
- * 结果与错误统一写入 [SettingsUiState.message]，由 UI 层 Toast 提示；
+ * 结果与错误统一写入 [SettingsUiState.message]，由 UI 层 Snackbar 提示；
  * 分类删除时仓库抛出的 IllegalStateException（"分类下还有题目"）也在此捕获。
  */
 class SettingsViewModel(
@@ -113,28 +115,33 @@ class SettingsViewModel(
     }
 
     /** 获取模型列表：调用 AiClient.listModels，结果写入 uiState.modelList（实时拉取，覆盖内嵌型号）。
-     * 传入的是当前（可能尚未保存）的配置，便于用户改完 Base URL/Key 后直接测试。 */
-    fun fetchModels(config: AiConfig) {
+     * 传入的是当前（可能尚未保存）的配置，便于用户改完 Base URL/Key 后直接测试。
+     * @param inDialog true 时提示写入 modelMessage（模型选择对话框内展示，避免被窗口级对话框遮挡页面级 Snackbar）；
+     *                 false 时提示写入 message（页面级 Snackbar）。两条通道互斥，避免残留旧提示。 */
+    fun fetchModels(config: AiConfig, inDialog: Boolean = false) {
+        fun notify(msg: String) {
+            _uiState.update {
+                if (inDialog) it.copy(modelMessage = msg, message = null)
+                else it.copy(message = msg, modelMessage = null)
+            }
+        }
         if (config.baseUrl.isBlank() || config.apiKey.isBlank()) {
-            _uiState.update { it.copy(message = "请先填写 Base URL 与 API Key") }
+            notify("请先填写 Base URL 与 API Key")
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val models = DataContainer.aiClient.listModels(config.baseUrl, config.apiKey, config.timeoutSeconds)
-                _uiState.update {
-                    it.copy(
-                        modelList = models,
-                        message = if (models.isEmpty()) "未获取到模型，请手动输入" else "已获取 ${models.size} 个模型",
-                    )
-                }
+                notify(if (models.isEmpty()) "未获取到模型，请手动输入" else "已获取 ${models.size} 个模型")
+                _uiState.update { it.copy(modelList = models) }
             } catch (e: Exception) {
                 val msg = when (e) {
                     is IOException -> "获取失败：网络错误或接口不可用"
                     is TimeoutCancellationException -> "获取超时（${config.timeoutSeconds} 秒）"
                     else -> "获取失败：${e.message ?: "未知错误"}"
                 }
-                _uiState.update { it.copy(modelList = null, message = msg) }
+                _uiState.update { it.copy(modelList = null) }
+                notify(msg)
             }
         }
     }
@@ -334,9 +341,14 @@ class SettingsViewModel(
     private fun backupErrorMessage(e: IllegalArgumentException): String =
         if (e.message?.contains("版本过高") == true) e.message.orEmpty() else "备份文件格式不正确"
 
-    /** UI 弹出 Toast 后消费掉 message，避免重复提示 */
+    /** UI 弹出 Snackbar 后消费掉 message，避免重复提示 */
     fun consumeMessage() {
         _uiState.update { it.copy(message = null) }
+    }
+
+    /** 模型选择对话框展示后消费掉 modelMessage */
+    fun consumeModelMessage() {
+        _uiState.update { it.copy(modelMessage = null) }
     }
 
     /**
