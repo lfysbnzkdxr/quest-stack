@@ -5,6 +5,8 @@ composeBom = "2026.06.00"
 activityCompose = "1.13.0"
 lifecycle = "2.11.0"
 miuix = "0.9.3"
+navigation3 = "1.1.6"
+navigationevent = "1.1.2"
 room = "2.8.4"
 ksp = "2.3.10"
 serializationJson = "1.11.0"
@@ -21,6 +23,9 @@ androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", versi
 miuix-ui = { group = "top.yukonga.miuix.kmp", name = "miuix-ui-android", version.ref = "miuix" }
 miuix-icons = { group = "top.yukonga.miuix.kmp", name = "miuix-icons-android", version.ref = "miuix" }
 miuix-blur = { group = "top.yukonga.miuix.kmp", name = "miuix-blur-android", version.ref = "miuix" }
+androidx-navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version.ref = "navigation3" }
+androidx-navigationevent-compose = { group = "androidx.navigationevent", name = "navigationevent-compose", version.ref = "navigationevent" }
+miuix-navigation3-ui = { group = "top.yukonga.miuix.kmp", name = "miuix-navigation3-ui-android", version.ref = "miuix" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
