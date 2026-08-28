@@ -2,7 +2,6 @@ package com.queststack.ui.screen.settings
 
 import android.app.Application
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -114,8 +113,6 @@ fun SettingsSubScreen(
             viewModel.consumeMessage()
         }
     }
-
-    BackHandler { onBack() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         PageScaffold(
