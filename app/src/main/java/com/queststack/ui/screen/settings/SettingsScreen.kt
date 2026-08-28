@@ -98,7 +98,7 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = MiuixIcons.Info,
                     title = "关于",
-                    summary = "版本 0.1.0",
+                    summary = "版本 0.2.0",
                     onClick = { onNavigateSub(SettingsSubRoute.About) },
                 )
                 Spacer(modifier = Modifier.height(20.dp))
