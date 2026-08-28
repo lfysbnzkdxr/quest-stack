@@ -1,8 +1,8 @@
 package com.queststack.ui.screen.add
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -35,6 +34,8 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.SnackbarHost
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -47,7 +48,7 @@ fun AddScreen(
     viewModel: AddViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // AI 配置可用性：baseUrl 与 model 均已填写才启用 AI 按钮
     val aiConfig = uiState.aiConfig
@@ -79,10 +80,10 @@ fun AddScreen(
             answerState.edit { replace(0, length, uiState.answer) }
         }
     }
-    // 保存结果提示：message 仅用于 Toast，返回导航由独立事件 saved 驱动
+    // 保存结果提示：message 事件驱动页内 Snackbar，返回导航由独立事件 saved 驱动
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            snackbarHostState.showSnackbar(it)
             viewModel.consumeMessage()
         }
     }
@@ -91,13 +92,14 @@ fun AddScreen(
         viewModel.savedEvents.collect { onBack() }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             // 全屏 overlay 必须铺底，否则下面的 pager 内容透出来
             .background(MiuixTheme.colorScheme.surface),
     ) {
-        SmallTopAppBar(
+        Column(modifier = Modifier.fillMaxSize()) {
+            SmallTopAppBar(
             title = "添加题目",
             color = MiuixTheme.colorScheme.surface,
             navigationIcon = {
@@ -188,5 +190,10 @@ fun AddScreen(
             }
             Spacer(modifier = Modifier.height(24.dp))
         }
+        }
+        SnackbarHost(
+            state = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }

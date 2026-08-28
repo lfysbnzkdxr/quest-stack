@@ -1,7 +1,6 @@
 package com.queststack.ui.screen.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,6 +28,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 /** 主页（仪表盘）：随机练题 */
 @Composable
@@ -69,11 +69,11 @@ private fun RandomPracticeCard(
     val primary = MiuixTheme.colorScheme.primary
     val onPrimary = MiuixTheme.colorScheme.onPrimary
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = if (hasQuestions) onStart else onGoLibrary),
+        onClick = if (hasQuestions) onStart else onGoLibrary,
+        modifier = Modifier.fillMaxWidth(),
         cornerRadius = 24.dp,
         insideMargin = PaddingValues(0.dp),
+        pressFeedbackType = PressFeedbackType.Tilt,
     ) {
         Column(
             modifier = Modifier

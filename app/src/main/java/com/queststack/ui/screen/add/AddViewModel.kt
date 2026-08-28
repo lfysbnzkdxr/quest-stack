@@ -244,7 +244,7 @@ class AddViewModel(
         }
     }
 
-    /** UI 弹出 Toast 后消费掉 message，避免重复提示 */
+    /** UI 弹出 Snackbar 后消费掉 message，避免重复提示 */
     fun consumeMessage() {
         _uiState.update { it.copy(message = null) }
     }

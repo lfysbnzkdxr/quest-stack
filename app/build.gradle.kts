@@ -72,6 +72,7 @@ dependencies {
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.navigationevent.compose)
     implementation(libs.miuix.navigation3.ui)
+    implementation(libs.miuix.preference)
 
     // Room
     implementation(libs.androidx.room.runtime)

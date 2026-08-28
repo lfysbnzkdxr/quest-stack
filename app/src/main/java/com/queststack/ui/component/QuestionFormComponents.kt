@@ -1,6 +1,5 @@
 package com.queststack.ui.component
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +14,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.queststack.data.db.Category
@@ -171,16 +169,9 @@ fun AiActionButtons(
     onOptimize: () -> Unit,
     onFormat: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val notConfiguredTip: () -> Unit = {
-        Toast.makeText(context, "请先在设置中配置 AI 接口", Toast.LENGTH_SHORT).show()
-    }
-
     if (!titleIsBlank && answerIsBlank) {
         Button(
-            onClick = {
-                if (!aiConfigured) notConfiguredTip() else onGenerate()
-            },
+            onClick = onGenerate,
             enabled = aiConfigured && !aiBusy,
             colors = ButtonDefaults.buttonColorsPrimary(),
             modifier = Modifier
@@ -195,9 +186,7 @@ fun AiActionButtons(
     } else if (!answerIsBlank) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = {
-                    if (!aiConfigured) notConfiguredTip() else onOptimize()
-                },
+                onClick = onOptimize,
                 enabled = aiConfigured && !aiBusy,
                 modifier = Modifier.weight(1f),
             ) {
@@ -207,9 +196,7 @@ fun AiActionButtons(
                 )
             }
             Button(
-                onClick = {
-                    if (!aiConfigured) notConfiguredTip() else onFormat()
-                },
+                onClick = onFormat,
                 enabled = aiConfigured && !aiBusy,
                 modifier = Modifier.weight(1f),
             ) {

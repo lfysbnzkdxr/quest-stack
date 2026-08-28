@@ -1,10 +1,8 @@
 package com.queststack.ui.screen.settings
 
 import android.app.Application
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.rememberScrollState
@@ -30,20 +27,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.queststack.ai.PRESETS
-import com.queststack.ai.ModelPreset
+import com.queststack.ui.component.ConfirmDialog
+import com.queststack.ui.component.InputDialog
 import top.yukonga.miuix.kmp.basic.Slider
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,29 +49,31 @@ import com.queststack.data.backup.WebDavConfig
 import com.queststack.data.db.Category
 import com.queststack.data.repository.AiConfig
 import com.queststack.ui.component.PageScaffold
-import com.queststack.ui.component.FilterDropdownButton
 import com.queststack.ui.theme.AppSettings
 import com.queststack.ui.theme.ThemeMode
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.SnackbarHost
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.basic.DropdownItem
-import top.yukonga.miuix.kmp.basic.DropdownEntry
-import top.yukonga.miuix.kmp.window.WindowCascadingListPopup
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.Theme
+import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 /** 本地导出文件名：quest-stack-backup-YYYYMMDD.json */
 private fun backupFileName(): String =
@@ -104,64 +103,91 @@ fun SettingsSubScreen(
     ),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val showMessage: (String) -> Unit = { message ->
+        scope.launch { snackbarHostState.showSnackbar(message) }
+    }
 
-    // 统一 Toast 提示（保存结果 / 错误）
+    // 统一页内 Snackbar 提示（保存结果 / 错误）
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            snackbarHostState.showSnackbar(it)
             viewModel.consumeMessage()
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        PageScaffold(
-            title = route.title,
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = MiuixIcons.ChevronBackward,
-                        contentDescription = "返回",
-                        tint = MiuixTheme.colorScheme.onBackground,
-                    )
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            PageScaffold(
+                title = route.title,
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = MiuixIcons.ChevronBackward,
+                            contentDescription = "返回",
+                            tint = MiuixTheme.colorScheme.onBackground,
+                        )
+                    }
+                },
+            ) { scrollBehavior ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .nestedScroll(scrollBehavior.nestedScrollConnection)
+                        .imePadding()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    when (route) {
+                        SettingsSubRoute.Appearance -> AppearanceContent(viewModel)
+                        SettingsSubRoute.Ai -> AiContent(uiState, viewModel, showMessage)
+                        SettingsSubRoute.Category -> CategoryContent(uiState, viewModel)
+                        SettingsSubRoute.Backup -> BackupContent(uiState, viewModel, showMessage)
+                        SettingsSubRoute.About -> AboutContent()
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
                 }
-            },
-        ) { scrollBehavior ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .imePadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                when (route) {
-                    SettingsSubRoute.Appearance -> AppearanceContent(viewModel)
-                    SettingsSubRoute.Ai -> AiContent(uiState, viewModel)
-                    SettingsSubRoute.Category -> CategoryContent(uiState, viewModel)
-                    SettingsSubRoute.Backup -> BackupContent(uiState, viewModel)
-                    SettingsSubRoute.About -> AboutContent()
-                }
-                Spacer(modifier = Modifier.height(20.dp))
             }
         }
+        SnackbarHost(
+            state = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 
 @Composable
 private fun AppearanceContent(viewModel: SettingsViewModel) {
-    SettingsSectionCard("外观") {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AppThemeChip("跟随系统", ThemeMode.System, AppSettings.themeMode) {
-                viewModel.setThemeMode(ThemeMode.System)
-            }
-            AppThemeChip("浅色", ThemeMode.Light, AppSettings.themeMode) {
-                viewModel.setThemeMode(ThemeMode.Light)
-            }
-            AppThemeChip("深色", ThemeMode.Dark, AppSettings.themeMode) {
-                viewModel.setThemeMode(ThemeMode.Dark)
-            }
+    SettingsSectionCard("外观", insideMargin = PaddingValues(0.dp)) {
+        val options = listOf("跟随系统", "浅色", "深色")
+        val selectedIndex = when (AppSettings.themeMode) {
+            ThemeMode.System -> 0
+            ThemeMode.Light -> 1
+            ThemeMode.Dark -> 2
         }
+        WindowDropdownPreference(
+            items = options,
+            selectedIndex = selectedIndex,
+            title = "主题模式",
+            startAction = {
+                Icon(
+                    imageVector = MiuixIcons.Theme,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 6.dp),
+                    tint = MiuixTheme.colorScheme.onBackground,
+                )
+            },
+            onSelectedIndexChange = { index ->
+                viewModel.setThemeMode(
+                    when (index) {
+                        0 -> ThemeMode.System
+                        1 -> ThemeMode.Light
+                        else -> ThemeMode.Dark
+                    },
+                )
+            },
+        )
     }
 }
 
@@ -169,8 +195,8 @@ private fun AppearanceContent(viewModel: SettingsViewModel) {
 private fun AiContent(
     uiState: SettingsUiState,
     viewModel: SettingsViewModel,
+    showMessage: (String) -> Unit,
 ) {
-    val context = LocalContext.current
     val baseUrlState = remember { TextFieldState() }
     val apiKeyState = remember { TextFieldState() }
     val modelState = remember { TextFieldState() }
@@ -178,7 +204,6 @@ private fun AiContent(
     var temperature by remember { mutableStateOf(0.7f) }
     var timeoutSeconds by remember { mutableStateOf(30) }
 
-    var providerPickerOpen by remember { mutableStateOf(false) }
     var modelPickerOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.aiConfig) {
@@ -203,51 +228,31 @@ private fun AiContent(
         modifier = Modifier.fillMaxWidth(),
     ) {
         // 1. 供应商预设
-        SettingsSectionCard("预设供应商") {
-            val presetName = when (presetId) {
-                "custom" -> "自定义配置"
-                else -> PRESETS.firstOrNull { it.id == presetId }?.name ?: "自定义配置"
+        SettingsSectionCard("预设供应商", insideMargin = PaddingValues(0.dp)) {
+            val presetNames = buildList {
+                add("自定义配置")
+                PRESETS.forEach { add(it.name) }
             }
-            Box(modifier = Modifier.fillMaxWidth()) {
-                FilterDropdownButton(
-                    label = presetName,
-                    expanded = providerPickerOpen,
-                    onClick = { providerPickerOpen = true },
-                )
-                WindowCascadingListPopup(
-                    show = providerPickerOpen,
-                    entries = listOf(
-                        DropdownEntry(
-                            items = buildList {
-                                add(
-                                    DropdownItem(
-                                        text = "自定义配置",
-                                        selected = presetId == "custom",
-                                        onClick = { presetId = "custom"; providerPickerOpen = false },
-                                    ),
-                                )
-                                PRESETS.forEach { p ->
-                                    add(
-                                        DropdownItem(
-                                            text = p.name,
-                                            selected = presetId == p.id,
-                                            onClick = {
-                                                presetId = p.id
-                                                if (p.defaultBaseUrl.isNotBlank()) {
-                                                    baseUrlState.edit { replace(0, length, p.defaultBaseUrl) }
-                                                }
-                                                providerPickerOpen = false
-                                            },
-                                        ),
-                                    )
-                                }
-                            },
-                        ),
-                    ),
-                    onDismissRequest = { providerPickerOpen = false },
-                    enableWindowDim = false,
-                )
+            val selectedIndex = when (val id = presetId) {
+                "custom" -> 0
+                else -> PRESETS.indexOfFirst { it.id == id }.let { if (it >= 0) it + 1 else 0 }
             }
+            WindowDropdownPreference(
+                items = presetNames,
+                selectedIndex = selectedIndex,
+                title = "预设供应商",
+                onSelectedIndexChange = { index ->
+                    if (index == 0) {
+                        presetId = "custom"
+                    } else {
+                        val preset = PRESETS[index - 1]
+                        presetId = preset.id
+                        if (preset.defaultBaseUrl.isNotBlank()) {
+                            baseUrlState.edit { replace(0, length, preset.defaultBaseUrl) }
+                        }
+                    }
+                },
+            )
         }
 
         // 2. 连接配置
@@ -344,12 +349,12 @@ private fun AiContent(
                 val config = buildConfig()
                 when {
                     config.baseUrl.isEmpty() ->
-                        Toast.makeText(context, "Base URL 不能为空", Toast.LENGTH_SHORT).show()
+                        showMessage("Base URL 不能为空")
                     config.model.isEmpty() ->
-                        Toast.makeText(context, "模型不能为空", Toast.LENGTH_SHORT).show()
+                        showMessage("模型不能为空")
                     else -> {
                         viewModel.saveAiConfig(config)
-                        Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+                        showMessage("已保存")
                     }
                 }
             },
@@ -387,77 +392,106 @@ private fun AiContent(
         ModelPickerDialog(
             modelList = uiState.modelList,
             modelState = modelState,
-            onFetch = { viewModel.fetchModels(buildConfig()) },
+            modelMessage = uiState.modelMessage,
+            onMessageShown = viewModel::consumeModelMessage,
+            onFetch = { viewModel.fetchModels(buildConfig(), inDialog = true) },
             onDismiss = { modelPickerOpen = false },
         )
     }
 }
 
-/** 模型选择器对话框：展示实时拉取的模型列表 + 手动输入兜底 */
+/** 模型选择器对话框：展示实时拉取的模型列表 + 手动输入兜底（Miuix WindowDialog）。
+ *  获取模型的提示（modelMessage）在对话框内展示，避免被窗口级对话框遮挡页面级 Snackbar。 */
 @Composable
 private fun ModelPickerDialog(
     modelList: List<String>?,
     modelState: TextFieldState,
+    modelMessage: String?,
+    onMessageShown: () -> Unit,
     onFetch: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("选择模型", fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                Spacer(Modifier.height(8.dp))
-                when {
-                    modelList == null ->
-                        Text("尚未获取模型列表，请先点「获取模型列表」，或手动输入", fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
-                    modelList.isEmpty() ->
-                        Text("未获取到模型，请手动输入", fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
-                    else -> {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(240.dp)
-                                .verticalScroll(rememberScrollState()),
-                        ) {
-                            modelList.forEach { m ->
-                                val selected = modelState.text.toString() == m
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            modelState.edit { replace(0, length, m) }
-                                            onDismiss()
-                                        }
-                                        .padding(vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = m,
-                                        fontSize = 14.sp,
-                                        color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onBackground,
-                                    )
-                                }
-                                Box(Modifier.fillMaxWidth().height(1.dp).background(MiuixTheme.colorScheme.dividerLine))
+    // 对话框内暂存提示文案：modelMessage 变化时显示并立即消费（消费后 uiState 清空，本地保留显示）
+    var shownMessage by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(modelMessage) {
+        modelMessage?.let {
+            shownMessage = it
+            onMessageShown()
+        }
+    }
+
+    WindowDialog(
+        show = true,
+        title = "选择模型",
+        onDismissRequest = onDismiss,
+    ) {
+        Column {
+            when {
+                modelList == null ->
+                    Text("尚未获取模型列表，请先点「获取模型列表」，或手动输入", fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                modelList.isEmpty() ->
+                    Text("未获取到模型，请手动输入", fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                else -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(240.dp)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        modelList.forEach { m ->
+                            val selected = modelState.text.toString() == m
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        modelState.edit { replace(0, length, m) }
+                                        onDismiss()
+                                    }
+                                    .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = m,
+                                    fontSize = 14.sp,
+                                    color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onBackground,
+                                )
                             }
+                            HorizontalDivider()
                         }
                     }
                 }
+            }
+            shownMessage?.let {
                 Spacer(Modifier.height(8.dp))
-                Text("手动输入", fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
-                TextField(
-                    state = modelState,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = "模型名称",
-                    useLabelAsPlaceholder = true,
-                    lineLimits = TextFieldLineLimits.SingleLine,
+                Text(
+                    text = it,
+                    fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
-                Spacer(Modifier.height(12.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(text = "获取模型列表", onClick = onFetch)
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = onDismiss, colors = ButtonDefaults.buttonColorsPrimary()) {
-                        Text("完成")
-                    }
-                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text("手动输入", fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+            TextField(
+                state = modelState,
+                modifier = Modifier.fillMaxWidth(),
+                label = "模型名称",
+                useLabelAsPlaceholder = true,
+                lineLimits = TextFieldLineLimits.SingleLine,
+            )
+            Spacer(Modifier.height(12.dp))
+            Row {
+                TextButton(
+                    text = "获取模型列表",
+                    onClick = onFetch,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(20.dp))
+                TextButton(
+                    text = "完成",
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                )
             }
         }
     }
@@ -530,9 +564,9 @@ private fun CategoryContent(
     }
 
     if (addDialogOpen) {
-        CategoryInputDialog(
+        InputDialog(
             title = "添加分类",
-            initial = "",
+            label = "分类名称",
             confirmLabel = "添加",
             onConfirm = { name ->
                 if (name.isNotBlank()) viewModel.addCategory(name)
@@ -542,8 +576,9 @@ private fun CategoryContent(
         )
     }
     renameTarget?.let { target ->
-        CategoryInputDialog(
+        InputDialog(
             title = "重命名分类",
+            label = "分类名称",
             initial = target.name,
             confirmLabel = "保存",
             onConfirm = { name ->
@@ -554,8 +589,11 @@ private fun CategoryContent(
         )
     }
     deleteTarget?.let { target ->
-        CategoryDeleteDialog(
-            category = target,
+        ConfirmDialog(
+            title = "删除分类",
+            message = "确定要删除分类「${target.name}」吗？该操作无法恢复。",
+            confirmLabel = "删除",
+            destructive = true,
             onConfirm = {
                 viewModel.deleteCategory(target)
                 deleteTarget = null
@@ -569,8 +607,8 @@ private fun CategoryContent(
 private fun BackupContent(
     uiState: SettingsUiState,
     viewModel: SettingsViewModel,
+    showMessage: (String) -> Unit,
 ) {
-    val context = LocalContext.current
     val webDavUrlState = remember { TextFieldState() }
     val webDavUserState = remember { TextFieldState() }
     val webDavPassState = remember { TextFieldState() }
@@ -654,7 +692,7 @@ private fun BackupContent(
                             password = webDavPassState.text.toString().trim(),
                         ),
                     )
-                    Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+                    showMessage("已保存")
                 },
                 colors = ButtonDefaults.buttonColorsPrimary(),
                 modifier = Modifier
@@ -723,10 +761,13 @@ private fun AboutContent() {
     }
 }
 
-/** 设置卡片：小标题 + 圆角卡片内容 */
+/** 设置卡片：小标题 + 圆角卡片内容。
+ *  @param insideMargin 卡片内边距；preference 组件卡传 PaddingValues(0.dp) 让选项行铺满卡片，
+ *  按压覆盖（MiuixIndication 矩形）视觉上与 KernelSU 一致（整卡变暗）；内容卡保留默认边距。 */
 @Composable
 private fun SettingsSectionCard(
     title: String,
+    insideMargin: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column {
@@ -734,135 +775,10 @@ private fun SettingsSectionCard(
         Card(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 16.dp,
-            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+            insideMargin = insideMargin,
         ) {
             content()
         }
         Spacer(modifier = Modifier.height(20.dp))
-    }
-}
-
-/** 外观主题三选一 chip：当前主题高亮 */
-@Composable
-private fun AppThemeChip(label: String, mode: ThemeMode, current: ThemeMode, onClick: () -> Unit) {
-    val selected = mode == current
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(percent = 50))
-            .background(
-                if (selected) MiuixTheme.colorScheme.primary
-                else MiuixTheme.colorScheme.surfaceContainer,
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-    ) {
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-            color = if (selected) MiuixTheme.colorScheme.onPrimary
-            else MiuixTheme.colorScheme.onSurfaceContainer,
-        )
-    }
-}
-
-/** 分类 添加/重命名 对话框（自绘，miuix 无 AlertDialog） */
-@Composable
-private fun CategoryInputDialog(
-    title: String,
-    initial: String,
-    confirmLabel: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val state = remember(initial) { TextFieldState(initial) }
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 28.dp,
-            insideMargin = PaddingValues(horizontal = 24.dp, vertical = 22.dp),
-        ) {
-            Column {
-                Text(
-                    text = title,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onBackground,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                TextField(
-                    state = state,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = "分类名称",
-                    useLabelAsPlaceholder = true,
-                    lineLimits = TextFieldLineLimits.SingleLine,
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(text = "取消", onClick = onDismiss)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Button(
-                        onClick = { onConfirm(state.text.toString().trim()) },
-                        enabled = state.text.isNotBlank(),
-                        colors = ButtonDefaults.buttonColorsPrimary(),
-                    ) {
-                        Text(text = confirmLabel, fontSize = 14.sp)
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** 分类删除确认对话框（自绘） */
-@Composable
-private fun CategoryDeleteDialog(
-    category: Category,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 28.dp,
-            insideMargin = PaddingValues(horizontal = 24.dp, vertical = 22.dp),
-        ) {
-            Column {
-                Text(
-                    text = "删除分类",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onBackground,
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "确定要删除分类「${category.name}」吗？该操作无法恢复。",
-                    fontSize = 14.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(text = "取消", onClick = onDismiss)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Button(
-                        onClick = onConfirm,
-                        colors = ButtonDefaults.buttonColorsPrimary(
-                            color = MiuixTheme.colorScheme.error,
-                            contentColor = MiuixTheme.colorScheme.onError,
-                        ),
-                    ) {
-                        Text(text = "删除", fontSize = 14.sp)
-                    }
-                }
-            }
-        }
     }
 }

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -23,25 +22,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.queststack.data.db.Category
 import com.queststack.data.db.Question
 import com.queststack.ui.component.CategoryFilterBar
+import com.queststack.ui.component.ConfirmDialog
 import com.queststack.ui.component.PageScaffold
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Delete
@@ -56,11 +53,16 @@ fun difficultyLabel(d: Int): String = when (d) {
     else -> "简单"
 }
 
-fun difficultyColor(d: Int): Color = when (d) {
-    1 -> Color(0xFF00A871)
-    2 -> Color(0xFFE8890C)
-    3 -> Color(0xFFE5484D)
-    else -> Color(0xFF00A871)
+/** 难度数值 → 展示颜色（1=简单 2=中等 3=困难，非法值回退"简单"）；深色模式用亮色变体保证可读性 */
+@Composable
+fun difficultyColor(d: Int): Color {
+    val dark = MiuixTheme.colorScheme.background.luminance() < 0.5f
+    return when (d) {
+        1 -> if (dark) Color(0xFF57C99A) else Color(0xFF00A871)
+        2 -> if (dark) Color(0xFFF2A93C) else Color(0xFFE8890C)
+        3 -> if (dark) Color(0xFFF26E72) else Color(0xFFE5484D)
+        else -> if (dark) Color(0xFF57C99A) else Color(0xFF00A871)
+    }
 }
 
 @Composable
@@ -113,8 +115,11 @@ fun LibraryScreen(
     }
 
     deleteTarget?.let { target ->
-        DeleteConfirmDialog(
-            target = target,
+        ConfirmDialog(
+            title = "删除题目",
+            message = "确定要删除「${target.title}」吗？该题会被移除，且无法恢复。",
+            confirmLabel = "删除",
+            destructive = true,
             onConfirm = {
                 viewModel.deleteQuestion(target)
                 deleteTarget = null
@@ -203,54 +208,6 @@ private fun QuestionCard(
                     fontWeight = FontWeight.Medium,
                     color = difficultyColor(question.difficulty),
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DeleteConfirmDialog(
-    target: Question,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 28.dp,
-            insideMargin = PaddingValues(horizontal = 24.dp, vertical = 22.dp),
-        ) {
-            Column {
-                Text(
-                    text = "删除题目",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onBackground,
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "确定要删除「${target.title}」吗？该题会被移除，且无法恢复。",
-                    fontSize = 14.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(text = "取消", onClick = onDismiss)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Button(
-                        onClick = onConfirm,
-                        colors = ButtonDefaults.buttonColorsPrimary(
-                            color = MiuixTheme.colorScheme.error,
-                            contentColor = MiuixTheme.colorScheme.onError,
-                        ),
-                    ) {
-                        Text(text = "删除", fontSize = 14.sp)
-                    }
-                }
             }
         }
     }
