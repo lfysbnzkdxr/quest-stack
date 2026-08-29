@@ -1,12 +1,7 @@
 package com.queststack.ui.component
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -57,17 +52,13 @@ fun GlassTopAppBar(
 ) {
     val blurBackdrop = backdrop ?: LocalGlassBackdrop.current
     val topBar = @Composable {
-        Column {
-            // 状态栏高度占位：让顶栏背景（毛玻璃/纯色）盖满状态栏区域
-            Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-            TopAppBar(
-                title = title,
-                color = Color.Transparent,
-                navigationIcon = navigationIcon,
-                actions = actions,
-                scrollBehavior = scrollBehavior,
-            )
-        }
+        TopAppBar(
+            title = title,
+            color = Color.Transparent,
+            navigationIcon = navigationIcon,
+            actions = actions,
+            scrollBehavior = scrollBehavior,
+        )
     }
     if (isRuntimeShaderSupported() && blurBackdrop != null) {
         val surface = MiuixTheme.colorScheme.surface
