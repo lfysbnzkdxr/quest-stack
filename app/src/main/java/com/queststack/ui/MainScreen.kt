@@ -1,7 +1,6 @@
 package com.queststack.ui
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -38,6 +37,7 @@ import com.queststack.ui.component.FloatingBottomBar
 import com.queststack.ui.component.FloatingBottomBarItem
 import com.queststack.ui.component.LocalGlassBackdrop
 import com.queststack.ui.component.MainPagerState
+import com.queststack.ui.component.animation.NavSlideEasing
 import com.queststack.ui.component.rememberMainPagerState
 import com.queststack.ui.navigation.LocalNavigator
 import com.queststack.ui.navigation.Navigator
@@ -81,31 +81,6 @@ enum class MainTab(val icon: ImageVector, val label: String) {
  *   主页左移由 slide 动画与覆盖层滑入并行驱动，实现"覆盖式进入 + 旧页左移"（与 KernelSU 一致）。
  */
 
-/**
- * 主页左移动画缓动：复刻 miuix NavDisplay 内部 NavTransitionEasing(0.8f, 0.95f) 的
- * 欠阻尼曲线，使主页位移与覆盖层滑入（同为 500ms）完全同步。
- */
-private val MainScreenSlideEasing: Easing = object : Easing {
-    private val r: Float
-    private val w: Float
-    private val c2: Float
-
-    init {
-        val omega = 2.0 * Math.PI / 0.8
-        val k = omega * omega
-        val c = 0.95 * 4.0 * Math.PI / 0.8
-        w = (Math.sqrt(4.0 * k - c * c) / 2.0).toFloat()
-        r = (-c / 2.0).toFloat()
-        c2 = r / w
-    }
-
-    override fun transform(fraction: Float): Float {
-        val t = fraction.toDouble()
-        val decay = Math.exp(r * t)
-        return (decay * (-Math.cos(w * t) + c2 * Math.sin(w * t)) + 1.0).toFloat()
-    }
-}
-
 @Composable
 fun MainScreen() {
     val pagerState = rememberPagerState(pageCount = { MainTab.entries.size })
@@ -127,7 +102,7 @@ fun MainScreen() {
     val slide = remember { Animatable(0f) }
     LaunchedEffect(navigator.backStackSize()) {
         val target = if (navigator.backStackSize() > 1) -0.25f else 0f
-        slide.animateTo(target, tween(500, easing = MainScreenSlideEasing))
+        slide.animateTo(target, tween(500, easing = NavSlideEasing))
     }
 
     // 采集整页内容作为玻璃底栏的模糊背景层（底栏 overlay 与采集层互为兄弟）
