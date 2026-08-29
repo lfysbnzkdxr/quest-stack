@@ -34,6 +34,7 @@ data class PracticeSessionUiState(
     val difficulty: Int? = null,
     val current: Question? = null,
     val revealed: Boolean = false,
+    val canPrevious: Boolean = false,
     val loading: Boolean = true,
     val empty: Boolean = false,
 )
@@ -48,6 +49,8 @@ class PracticeSessionViewModel(
     private val _selectedCategoryId = MutableStateFlow(session.categoryId)
     private val _difficulty = MutableStateFlow(session.difficulty)
     private val _nextTick = MutableStateFlow(0)
+    /** 已看过的题 id 栈（下一题时压入，上一题时弹出），首题时为空 */
+    private val history = ArrayDeque<Long>()
     private var firstLoad = true
 
     private val _uiState = MutableStateFlow(
@@ -70,13 +73,19 @@ class PracticeSessionViewModel(
             combine(_selectedCategoryId, _difficulty, _nextTick) { c, d, _ -> c to d }
                 .flatMapLatest { (categoryId, difficulty) ->
                     flow {
-                        _uiState.update { it.copy(loading = true, revealed = false) }
+                        _uiState.update { it.copy(loading = true) }
                         emit(loadRandom(categoryId, difficulty))
                     }
                 }
                 .collect { current ->
+                    // revealed 与 current 同帧重置，避免旧题停留时先收起答案造成闪帧
                     _uiState.update {
-                        it.copy(current = current, loading = false, empty = current == null)
+                        it.copy(
+                            current = current,
+                            revealed = false,
+                            loading = false,
+                            empty = current == null,
+                        )
                     }
                 }
         }
@@ -97,21 +106,41 @@ class PracticeSessionViewModel(
 
     fun selectCategory(id: Long?) {
         if (_selectedCategoryId.value != id) _selectedCategoryId.value = id
-        _uiState.update { it.copy(selectedCategoryId = id) }
+        history.clear()
+        _uiState.update { it.copy(selectedCategoryId = id, canPrevious = false) }
     }
 
     fun selectDifficulty(d: Int?) {
         if (_difficulty.value != d) _difficulty.value = d
-        _uiState.update { it.copy(difficulty = d) }
+        history.clear()
+        _uiState.update { it.copy(difficulty = d, canPrevious = false) }
     }
 
-    fun revealAnswer() {
-        _uiState.update { it.copy(revealed = true) }
+    /** 切换答案展开/收起状态 */
+    fun toggleReveal() {
+        _uiState.update { it.copy(revealed = !it.revealed) }
     }
 
-    /** 下一题：随机重抽并收起答案 */
+    /** 下一题：把当前题压入历史栈，随机重抽并收起答案 */
     fun next() {
+        _uiState.value.current?.let { history.addLast(it.id) }
+        _uiState.update { it.copy(canPrevious = history.isNotEmpty()) }
         _nextTick.value++
+    }
+
+    /** 上一题：弹出历史栈顶并直接加载该题（不走随机），首题时无操作 */
+    fun previous() {
+        val id = history.removeLastOrNull() ?: return
+        viewModelScope.launch {
+            val question = questionRepository.getQuestion(id)
+            _uiState.update {
+                it.copy(
+                    current = question ?: it.current,
+                    revealed = false,
+                    canPrevious = history.isNotEmpty(),
+                )
+            }
+        }
     }
 
     /**
@@ -122,6 +151,7 @@ class PracticeSessionViewModel(
     fun start(session: PracticeSession) {
         this.session = session
         firstLoad = true
+        history.clear()
         _selectedCategoryId.value = session.categoryId
         _difficulty.value = session.difficulty
         _uiState.update {
@@ -130,6 +160,7 @@ class PracticeSessionViewModel(
                 difficulty = session.difficulty,
                 current = null,
                 revealed = false,
+                canPrevious = false,
                 loading = true,
                 empty = false,
             )

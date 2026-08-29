@@ -108,7 +108,7 @@ class PracticeSessionViewModelTest {
     }
 
     @Test
-    fun `revealAnswer 展开答案 next 后收起并换题`() = runTest(dispatcher.scheduler) {
+    fun `展开答案 next 后收起并换题`() = runTest(dispatcher.scheduler) {
         val vm = PracticeSessionViewModel(
             session = PracticeSession(),
             questionRepository = FakeQuestionRepository(
@@ -119,13 +119,31 @@ class PracticeSessionViewModelTest {
         )
         advanceUntilIdle()
 
-        vm.revealAnswer()
+        vm.toggleReveal()
         assertEquals(true, vm.uiState.value.revealed)
 
         vm.next()
         advanceUntilIdle()
         assertEquals(false, vm.uiState.value.revealed)
         assertEquals(q(2), vm.uiState.value.current)
+    }
+
+    @Test
+    fun `toggleReveal 可再次收起答案`() = runTest(dispatcher.scheduler) {
+        val vm = PracticeSessionViewModel(
+            session = PracticeSession(),
+            questionRepository = FakeQuestionRepository(
+                idsByFilter = mapOf(null to null to listOf(1L)),
+                questions = mapOf(1L to q(1)),
+            ),
+            categoryRepository = FakeCategoryRepository(),
+        )
+        advanceUntilIdle()
+
+        vm.toggleReveal()
+        assertEquals(true, vm.uiState.value.revealed)
+        vm.toggleReveal()
+        assertEquals(false, vm.uiState.value.revealed)
     }
 
     @Test
@@ -188,7 +206,7 @@ class PracticeSessionViewModelTest {
         advanceUntilIdle()
         assertEquals(q(1), vm.uiState.value.current)
 
-        vm.revealAnswer()
+        vm.toggleReveal()
         assertEquals(true, vm.uiState.value.revealed)
 
         // 模拟同 key 复用：重新开始一个带 startQuestionId 的新会话
