@@ -20,14 +20,21 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 /** 行首列表项：数字编号（1. / 1) / 1、）或短横线/圆点 */
 private val LIST_PREFIX = Regex("^\\s*(?:\\d+[).、]|[-•])\\s*")
 
+/** 整行小节标题：【xxx】（AI 生成答案的「精炼回答/详尽回答」分段头） */
+private val HEADER = Regex("^【(.+)】$")
+
+/** 列表项开头的关键词：到首个冒号为止，超长视为整句而非关键词 */
+private val KEYWORD = Regex("^(.{1,16}?)[：:]")
+
 /** 行内加粗标记：**内容**（不支持嵌套） */
 private val BOLD = Regex("\\*\\*(.+?)\\*\\*")
 
 /**
  * 轻量富文本渲染器（供长答案等使用）：
+ * - 整行 `【xxx】` → 小节标题（加粗、主题色、稍大字号）；
  * - `**加粗**` → 粗体 + 主题色强调；
  * - 空行分段 → 段前间距；
- * - 行首 `1.`/`1)`/`1、`/`-`/`•` → 列表项（编号加粗、换行悬挂缩进）。
+ * - 行首 `1.`/`1)`/`1、`/`-`/`•` → 列表项（编号加粗、换行悬挂缩进，开头「关键词：」加粗）。
  *
  * 纯文本自动降级为常规段落，无标记不影响显示。
  *
@@ -74,8 +81,15 @@ internal fun parseAnswer(text: String, highlightColor: Color): AnnotatedString =
     }
 }
 
-/** 追加一个段落：行首列表项做缩进，段内处理 **加粗** */
+/** 追加一个段落：标题行加粗放大，行首列表项做缩进与关键词强调，段内处理 **加粗** */
 private fun AnnotatedString.Builder.appendSegment(segment: String, highlightColor: Color) {
+    val header = HEADER.matchEntire(segment)
+    if (header != null) {
+        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = highlightColor, fontSize = 16.sp)) {
+            append(segment)
+        }
+        return
+    }
     val listMatch = LIST_PREFIX.find(segment)
     if (listMatch != null) {
         val rest = segment.substring(listMatch.range.last + 1)
@@ -83,10 +97,23 @@ private fun AnnotatedString.Builder.appendSegment(segment: String, highlightColo
             withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = highlightColor)) {
                 append(listMatch.value.trim() + " ")
             }
-            appendStyled(rest, highlightColor)
+            appendKeyword(rest, highlightColor)
         }
     } else {
         appendStyled(segment, highlightColor)
+    }
+}
+
+/** 列表项内容：开头「关键词：」加粗（本色），其余走常规样式解析 */
+private fun AnnotatedString.Builder.appendKeyword(rest: String, highlightColor: Color) {
+    val keyword = KEYWORD.find(rest)
+    if (keyword != null) {
+        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+            append(keyword.value)
+        }
+        appendStyled(rest.substring(keyword.value.length), highlightColor)
+    } else {
+        appendStyled(rest, highlightColor)
     }
 }
 

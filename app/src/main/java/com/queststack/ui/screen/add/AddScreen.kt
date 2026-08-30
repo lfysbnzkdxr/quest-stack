@@ -18,7 +18,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +31,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.queststack.ui.component.AiActionButtons
 import com.queststack.ui.component.CategorySelector
 import com.queststack.ui.component.DifficultySelector
+import com.queststack.ui.component.FormatGuideDialog
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -49,6 +52,7 @@ fun AddScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showFormatGuide by remember { mutableStateOf(false) }
 
     // AI 配置可用性：baseUrl 与 model 均已填写才启用 AI 按钮
     val aiConfig = uiState.aiConfig
@@ -159,13 +163,13 @@ fun AddScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 自动标准化格式（次要按钮）
-            Button(onClick = { viewModel.standardize() }) {
-                Text(text = "自动标准化格式", fontSize = 14.sp)
+            // 答案格式说明（弹窗展示 AnswerText 支持的标记写法）
+            Button(onClick = { showFormatGuide = true }) {
+                Text(text = "答案格式说明", fontSize = 14.sp)
             }
             Spacer(modifier = Modifier.height(12.dp))
 
-            // AI 功能区：标题已填答案为空 → 生成；答案非空 → 优化表述/格式
+            // AI 功能区：标题已填答案为空 → 生成；答案非空 → 优化表述
             AiActionButtons(
                 titleIsBlank = uiState.title.isBlank(),
                 answerIsBlank = uiState.answer.isBlank(),
@@ -173,7 +177,6 @@ fun AddScreen(
                 aiBusy = uiState.aiBusy,
                 onGenerate = viewModel::generateAnswer,
                 onOptimize = viewModel::optimizeAnswer,
-                onFormat = viewModel::formatAnswer,
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -195,5 +198,8 @@ fun AddScreen(
             state = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
+        if (showFormatGuide) {
+            FormatGuideDialog(onDismiss = { showFormatGuide = false })
+        }
     }
 }

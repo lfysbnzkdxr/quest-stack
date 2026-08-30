@@ -5,12 +5,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -113,4 +115,44 @@ fun InputDialog(
             }
         }
     }
+}
+
+/** 答案格式说明对话框：展示 AnswerText 支持的标记写法，供手动编辑答案时参考 */
+@Composable
+fun FormatGuideDialog(onDismiss: () -> Unit) {
+    WindowDialog(
+        show = true,
+        title = "答案格式说明",
+        onDismissRequest = onDismiss,
+    ) {
+        Column {
+            FormatRule("**重点内容**", "双星号包裹的文字显示为加粗主题色强调")
+            FormatRule("【小节标题】", "独占整行的全角括号标记显示为加粗放大的小节标题")
+            FormatRule("1) 2) 3) 或 -", "行首编号（1. / 1) / 1、）或短横线显示为列表项，行首「关键词：」自动加粗")
+            FormatRule("空行", "空行分隔段落，建议小节之间保留一个空行")
+            Spacer(modifier = Modifier.height(20.dp))
+            TextButton(
+                text = "知道了",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.textButtonColorsPrimary(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun FormatRule(marker: String, description: String) {
+    Text(
+        text = marker,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = MiuixTheme.colorScheme.onBackground,
+    )
+    Text(
+        text = description,
+        fontSize = 13.sp,
+        color = MiuixTheme.colorScheme.onBackgroundVariant,
+        modifier = Modifier.padding(bottom = 12.dp),
+    )
 }
