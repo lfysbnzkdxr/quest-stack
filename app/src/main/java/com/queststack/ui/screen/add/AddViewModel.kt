@@ -9,6 +9,7 @@ import com.queststack.data.repository.AiConfig
 import com.queststack.data.repository.CategoryRepository
 import com.queststack.data.repository.QuestionRepository
 import com.queststack.data.repository.SettingsRepository
+import com.queststack.util.AnswerMeta
 import com.queststack.util.TextStandardizer
 import java.io.IOException
 import kotlinx.coroutines.TimeoutCancellationException
@@ -80,19 +81,6 @@ class AddViewModel(
         _uiState.update { it.copy(difficulty = d) }
     }
 
-    /** 标准化答案文本（统一换行、去除首尾空白），原子问题不做问答对拆分 */
-    fun standardize() {
-        val current = _uiState.value
-        if (current.answer.isBlank()) return
-        _uiState.update {
-            it.copy(
-                answer = TextStandardizer.normalize(current.answer),
-                title = TextStandardizer.normalize(current.title),
-                message = "已标准化格式",
-            )
-        }
-    }
-
     // ------------------------------------------------------------------
     // AI 功能
     // ------------------------------------------------------------------
@@ -128,6 +116,8 @@ class AddViewModel(
             try {
                 val answer = aiClient.generateAnswer(
                     config.baseUrl, config.apiKey, config.model, current.title,
+                    difficulty = current.difficulty,
+                    categories = current.categories.map { it.name },
                     temperature = config.temperature,
                     timeoutSeconds = config.timeoutSeconds,
                 )
@@ -137,11 +127,20 @@ class AddViewModel(
                     }
                     return@launch
                 }
+                // 剥离并回填 AI 建议分类；生成期间用户手动改过分类则以用户选择优先（后写覆盖）
+                val parsed = AnswerMeta.parse(answer, current.categories, current.selectedCategoryId)
+                if (parsed.body.isBlank()) {
+                    _uiState.update {
+                        it.copy(aiBusy = false, message = "AI 未返回有效内容，请重试")
+                    }
+                    return@launch
+                }
                 _uiState.update {
                     it.copy(
                         aiBusy = false,
-                        answer = answer,
-                        message = "AI 已生成答案（可预览后保存）",
+                        answer = parsed.body,
+                        selectedCategoryId = if (parsed.hasSuggestion && it.selectedCategoryId == current.selectedCategoryId) parsed.categoryId else it.selectedCategoryId,
+                        message = if (parsed.hasSuggestion) "AI 已生成答案并选择分类（可预览后保存）" else "AI 已生成答案（可预览后保存）",
                     )
                 }
             } catch (e: Exception) {
@@ -164,50 +163,21 @@ class AddViewModel(
             try {
                 val optimized = aiClient.optimizeAnswer(
                     config.baseUrl, config.apiKey, config.model, current.title, current.answer,
+                    difficulty = current.difficulty,
                     temperature = config.temperature,
                     timeoutSeconds = config.timeoutSeconds,
                 )
-                _uiState.update {
-                    it.copy(
-                        aiBusy = false,
-                        answer = optimized,
-                        message = "已优化表述",
-                    )
-                }
-            } catch (e: Exception) {
-                handleAiError(config, e)
-            }
-        }
-    }
-
-    /** AI 优化格式：整理答案文本结构并写回答案输入框 */
-    fun formatAnswer() {
-        val current = _uiState.value
-        if (current.aiBusy || current.answer.isBlank()) return
-        val config = requireAiConfig()
-        if (config == null) {
-            _uiState.update { it.copy(message = "请先在设置中配置 AI 接口") }
-            return
-        }
-        _uiState.update { it.copy(aiBusy = true, message = null) }
-        viewModelScope.launch {
-            try {
-                val formatted = aiClient.formatAnswer(
-                    config.baseUrl, config.apiKey, config.model, current.title, current.answer,
-                    temperature = config.temperature,
-                    timeoutSeconds = config.timeoutSeconds,
-                )
-                if (formatted.isBlank()) {
+                if (optimized.isBlank()) {
                     _uiState.update {
-                        it.copy(aiBusy = false, message = "AI 未返回有效内容，请重试")
+                        it.copy(aiBusy = false, message = "AI 未返回有效内容，已保留原答案")
                     }
                     return@launch
                 }
                 _uiState.update {
                     it.copy(
                         aiBusy = false,
-                        answer = formatted,
-                        message = "已按 AI 整理格式",
+                        answer = optimized,
+                        message = "已优化表述",
                     )
                 }
             } catch (e: Exception) {
@@ -225,7 +195,7 @@ class AddViewModel(
             try {
                 questionRepository.addQuestion(
                     title = TextStandardizer.normalize(current.title),
-                    answer = current.answer,
+                    answer = TextStandardizer.normalize(current.answer),
                     categoryId = current.selectedCategoryId,
                     difficulty = current.difficulty,
                 )

@@ -38,6 +38,7 @@ import com.queststack.ui.component.AnswerText
 import com.queststack.ui.component.ContentBlock
 import com.queststack.ui.component.CategorySelector
 import com.queststack.ui.component.DifficultySelector
+import com.queststack.ui.component.FormatGuideDialog
 import com.queststack.ui.component.PageScaffold
 import com.queststack.ui.screen.library.difficultyColor
 import com.queststack.ui.screen.library.difficultyLabel
@@ -289,8 +290,9 @@ private fun EditContent(
         }
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(onClick = { viewModel.standardize() }) {
-            Text(text = "自动标准化格式", fontSize = 14.sp)
+        var showFormatGuide by remember { mutableStateOf(false) }
+        Button(onClick = { showFormatGuide = true }) {
+            Text(text = "答案格式说明", fontSize = 14.sp)
         }
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -301,9 +303,12 @@ private fun EditContent(
             aiBusy = uiState.aiBusy,
             onGenerate = viewModel::generateAnswer,
             onOptimize = viewModel::optimizeAnswer,
-            onFormat = viewModel::formatAnswer,
         )
         Spacer(modifier = Modifier.height(24.dp))
+
+        if (showFormatGuide) {
+            FormatGuideDialog(onDismiss = { showFormatGuide = false })
+        }
     }
 }
 

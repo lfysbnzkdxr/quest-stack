@@ -1,10 +1,8 @@
 package com.queststack.ui.component
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -158,7 +156,7 @@ fun DifficultySelector(
     }
 }
 
-/** AI 功能区按钮：标题已填答案为空时显示「生成答案」，答案非空时显示「优化表述/优化格式」 */
+/** AI 功能区按钮：标题已填答案为空时显示「AI 生成答案」，答案非空时显示「AI 优化表述」 */
 @Composable
 fun AiActionButtons(
     titleIsBlank: Boolean,
@@ -167,7 +165,6 @@ fun AiActionButtons(
     aiBusy: Boolean,
     onGenerate: () -> Unit,
     onOptimize: () -> Unit,
-    onFormat: () -> Unit,
 ) {
     if (!titleIsBlank && answerIsBlank) {
         Button(
@@ -184,27 +181,17 @@ fun AiActionButtons(
             )
         }
     } else if (!answerIsBlank) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = onOptimize,
-                enabled = aiConfigured && !aiBusy,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = if (aiBusy) "AI 处理中…" else "AI 优化表述",
-                    fontSize = 14.sp,
-                )
-            }
-            Button(
-                onClick = onFormat,
-                enabled = aiConfigured && !aiBusy,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = if (aiBusy) "AI 处理中…" else "AI 优化格式",
-                    fontSize = 14.sp,
-                )
-            }
+        Button(
+            onClick = onOptimize,
+            enabled = aiConfigured && !aiBusy,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp),
+        ) {
+            Text(
+                text = if (aiBusy) "AI 处理中…" else "AI 优化表述",
+                fontSize = 14.sp,
+            )
         }
     }
 }

@@ -61,6 +61,29 @@ class AnswerTextTest {
     }
 
     @Test
+    fun `小节标题行整行加粗着色`() {
+        val a = parseAnswer("【精炼回答】\n正文一句", Color.Blue)
+        assertEquals("【精炼回答】\n正文一句", a.text)
+        val header = a.spanStyles.single { it.item.fontWeight == FontWeight.Bold }
+        assertEquals("【精炼回答】", a.text.substring(header.start, header.end))
+        assertEquals(Color.Blue, header.item.color)
+    }
+
+    @Test
+    fun `列表项关键词冒号前加粗本色`() {
+        val a = parseAnswer("1) 约束注入：让AI先读懂规则", Color.Blue)
+        assertEquals("1) 约束注入：让AI先读懂规则", a.text)
+        val bold = a.spanStyles.single { it.item.fontWeight == FontWeight.Bold }
+        assertEquals("约束注入：", a.text.substring(bold.start, bold.end))
+    }
+
+    @Test
+    fun `列表项冒号前过长不加粗`() {
+        val a = parseAnswer("1) 这是一个非常非常非常长的句子，中间有个：冒号", Color.Blue)
+        assertTrue(a.spanStyles.none { it.item.fontWeight == FontWeight.Bold })
+    }
+
+    @Test
     fun `空文本输出为空`() {
         assertEquals("", parseAnswer("", Color.Blue).text)
         assertEquals("", parseAnswer("  \n  ", Color.Blue).text)
