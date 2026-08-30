@@ -51,6 +51,8 @@ class PracticeSessionViewModel(
     private val _nextTick = MutableStateFlow(0)
     /** 已看过的题 id 栈（下一题时压入，上一题时弹出），首题时为空 */
     private val history = ArrayDeque<Long>()
+    /** 回退时暂存的题 id 栈：再次下一题时按原序重放（不重新随机），筛选变化/重新开始时清空 */
+    private val forward = ArrayDeque<Long>()
     private var firstLoad = true
 
     private val _uiState = MutableStateFlow(
@@ -107,12 +109,14 @@ class PracticeSessionViewModel(
     fun selectCategory(id: Long?) {
         if (_selectedCategoryId.value != id) _selectedCategoryId.value = id
         history.clear()
+        forward.clear()
         _uiState.update { it.copy(selectedCategoryId = id, canPrevious = false) }
     }
 
     fun selectDifficulty(d: Int?) {
         if (_difficulty.value != d) _difficulty.value = d
         history.clear()
+        forward.clear()
         _uiState.update { it.copy(difficulty = d, canPrevious = false) }
     }
 
@@ -121,16 +125,27 @@ class PracticeSessionViewModel(
         _uiState.update { it.copy(revealed = !it.revealed) }
     }
 
-    /** 下一题：把当前题压入历史栈，随机重抽并收起答案 */
+    /** 下一题：把当前题压入历史栈；若处于回退后的位置则按前进栈重放刚才跳过的题，否则随机重抽并收起答案 */
     fun next() {
         _uiState.value.current?.let { history.addLast(it.id) }
         _uiState.update { it.copy(canPrevious = history.isNotEmpty()) }
-        _nextTick.value++
+        val replayId = forward.removeLastOrNull()
+        if (replayId != null) {
+            loadDirect(replayId)
+        } else {
+            _nextTick.value++
+        }
     }
 
-    /** 上一题：弹出历史栈顶并直接加载该题（不走随机），首题时无操作 */
+    /** 上一题：当前题暂存前进栈，弹出历史栈顶并直接加载该题（不走随机），首题时无操作 */
     fun previous() {
         val id = history.removeLastOrNull() ?: return
+        _uiState.value.current?.let { forward.addLast(it.id) }
+        loadDirect(id)
+    }
+
+    /** 直接加载指定题（回退/前进重放共用），不走随机抽题 */
+    private fun loadDirect(id: Long) {
         viewModelScope.launch {
             val question = questionRepository.getQuestion(id)
             _uiState.update {
@@ -152,6 +167,7 @@ class PracticeSessionViewModel(
         this.session = session
         firstLoad = true
         history.clear()
+        forward.clear()
         _selectedCategoryId.value = session.categoryId
         _difficulty.value = session.difficulty
         _uiState.update {

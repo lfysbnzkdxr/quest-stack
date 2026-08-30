@@ -217,6 +217,114 @@ class PracticeSessionViewModelTest {
         assertEquals(false, vm.uiState.value.revealed)
     }
 
+    @Test
+    fun `回退后再下一题重放刚才跳过的题而非重新随机`() = runTest(dispatcher.scheduler) {
+        val vm = PracticeSessionViewModel(
+            session = PracticeSession(),
+            questionRepository = FakeQuestionRepository(
+                idsByFilter = mapOf(null to null to listOf(1L, 2L, 3L)),
+                questions = mapOf(1L to q(1), 2L to q(2), 3L to q(3)),
+            ),
+            categoryRepository = FakeCategoryRepository(),
+        )
+        advanceUntilIdle()
+        assertEquals(q(1), vm.uiState.value.current)
+
+        vm.next()
+        advanceUntilIdle()
+        val second = checkNotNull(vm.uiState.value.current)
+        assertTrue(second.id != 1L)
+
+        vm.next()
+        advanceUntilIdle()
+        val third = checkNotNull(vm.uiState.value.current)
+        assertTrue(third.id != second.id)
+
+        vm.previous()
+        advanceUntilIdle()
+        assertEquals(second, vm.uiState.value.current)
+
+        // 回退后再下一题：应重放刚才跳过的第三道，而不是重新随机抽题
+        vm.next()
+        advanceUntilIdle()
+        assertEquals(third, vm.uiState.value.current)
+    }
+
+    @Test
+    fun `多次回退后按原序逐题前进`() = runTest(dispatcher.scheduler) {
+        val vm = PracticeSessionViewModel(
+            session = PracticeSession(),
+            questionRepository = FakeQuestionRepository(
+                idsByFilter = mapOf(null to null to listOf(1L, 2L, 3L)),
+                questions = mapOf(1L to q(1), 2L to q(2), 3L to q(3)),
+            ),
+            categoryRepository = FakeCategoryRepository(),
+        )
+        advanceUntilIdle()
+        val first = checkNotNull(vm.uiState.value.current)
+
+        vm.next()
+        advanceUntilIdle()
+        val second = checkNotNull(vm.uiState.value.current)
+        assertTrue(second.id != first.id)
+
+        vm.next()
+        advanceUntilIdle()
+        val third = checkNotNull(vm.uiState.value.current)
+        assertTrue(third.id != second.id)
+
+        vm.previous()
+        advanceUntilIdle()
+        assertEquals(second, vm.uiState.value.current)
+        vm.previous()
+        advanceUntilIdle()
+        assertEquals(first, vm.uiState.value.current)
+
+        // 逐题前进：应重放 2 → 3（原序），重放完后才重新随机
+        vm.next()
+        advanceUntilIdle()
+        assertEquals(second, vm.uiState.value.current)
+        vm.next()
+        advanceUntilIdle()
+        assertEquals(third, vm.uiState.value.current)
+        vm.next()
+        advanceUntilIdle()
+        val fresh = checkNotNull(vm.uiState.value.current)
+        assertTrue(fresh.id != third.id)
+    }
+
+    @Test
+    fun `筛选变化清空回退重放栈`() = runTest(dispatcher.scheduler) {
+        val vm = PracticeSessionViewModel(
+            session = PracticeSession(),
+            questionRepository = FakeQuestionRepository(
+                idsByFilter = mapOf(
+                    null to null to listOf(1L, 2L),
+                    5L to null to listOf(3L, 4L),
+                ),
+                questions = mapOf(1L to q(1), 2L to q(2), 3L to q(3), 4L to q(4)),
+            ),
+            categoryRepository = FakeCategoryRepository(),
+        )
+        advanceUntilIdle()
+        assertEquals(q(1), vm.uiState.value.current)
+
+        vm.next()
+        advanceUntilIdle()
+        assertEquals(q(2), vm.uiState.value.current)
+        vm.previous()
+        advanceUntilIdle()
+        assertEquals(q(1), vm.uiState.value.current)
+
+        // 筛选变化后前进重放栈应清空：下一题从新范围重新随机
+        vm.selectCategory(5L)
+        advanceUntilIdle()
+        assertEquals(q(3), vm.uiState.value.current)
+        vm.next()
+        advanceUntilIdle()
+        assertEquals(q(4), vm.uiState.value.current)
+    }
+
     private fun q(id: Long) = Question(
         id = id,
         title = "题$id",
